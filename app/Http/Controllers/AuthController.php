@@ -3,12 +3,14 @@
 namespace App\Http\Controllers;
 
 use App\Models\User;
+use App\Rules\UkPhoneNumber;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Password;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
+use Illuminate\View\View;
 
 class AuthController extends Controller
 {
@@ -20,15 +22,23 @@ class AuthController extends Controller
         // Ensure API requests always expect JSON
         $request->headers->set('Accept', 'application/json');
         
+        // Normalize 'contact' to 'contact_number' if present
+        if ($request->has('contact') && !$request->has('contact_number')) {
+            $request->merge(['contact_number' => $request->contact]);
+        }
+        
         $request->validate([
             'name' => 'required|string|max:255',
             'email' => 'required|string|email|max:255|unique:users',
+            'contact_number' => ['required', 'string', 'max:20', new UkPhoneNumber()],
             'password' => 'required|string|min:8|confirmed',
         ]);
 
         $user = User::create([
             'name' => $request->name,
             'email' => $request->email,
+            'email_verified_at' => $request->email_verified_at,
+            'contact_number' => $request->contact_number,
             'password' => Hash::make($request->password),
         ]);
 
@@ -100,30 +110,66 @@ class AuthController extends Controller
     /**
      * Verify user's email
      */
-    public function verify(Request $request): JsonResponse
+    public function verify(Request $request): View|JsonResponse
     {
-        $user = User::findOrFail($request->route('id'));
+        try {
+            $user = User::findOrFail($request->route('id'));
 
-        if ($user->hasVerifiedEmail()) {
-            return response()->json([
-                'message' => 'Email already verified.',
-            ], 400);
+            if ($user->hasVerifiedEmail()) {
+                // If API request, return JSON; otherwise return view
+                if ($request->expectsJson()) {
+                    return response()->json([
+                        'message' => 'Email already verified.',
+                    ], 400);
+                }
+                
+                return view('email-verification', [
+                    'status' => 'already_verified',
+                    'user' => $user,
+                ]);
+            }
+
+            // Verify the signed URL hash
+            if (!hash_equals((string) $request->route('hash'), sha1($user->getEmailForVerification()))) {
+                if ($request->expectsJson()) {
+                    return response()->json([
+                        'message' => 'Invalid verification link.',
+                    ], 400);
+                }
+                
+                return view('email-verification', [
+                    'status' => 'error',
+                    'message' => 'Invalid verification link. The link may have expired or is invalid.',
+                ]);
+            }
+
+            if ($user->markEmailAsVerified()) {
+                event(new \Illuminate\Auth\Events\Verified($user));
+            }
+
+            // If API request, return JSON; otherwise return view
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'message' => 'Email verified successfully.',
+                ]);
+            }
+
+            return view('email-verification', [
+                'status' => 'success',
+                'user' => $user,
+            ]);
+        } catch (\Exception $e) {
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'message' => 'Verification failed. Please try again.',
+                ], 400);
+            }
+
+            return view('email-verification', [
+                'status' => 'error',
+                'message' => 'Verification failed. The link may have expired or is invalid.',
+            ]);
         }
-
-        // Verify the signed URL hash
-        if (!hash_equals((string) $request->route('hash'), sha1($user->getEmailForVerification()))) {
-            return response()->json([
-                'message' => 'Invalid verification link.',
-            ], 400);
-        }
-
-        if ($user->markEmailAsVerified()) {
-            event(new \Illuminate\Auth\Events\Verified($user));
-        }
-
-        return response()->json([
-            'message' => 'Email verified successfully.',
-        ]);
     }
 
     /**
