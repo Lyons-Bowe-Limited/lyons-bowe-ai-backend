@@ -46,8 +46,16 @@ class User extends Authenticatable implements MustVerifyEmail
         'email',
         'email_verified_at',
         'contact_number',
+        'profile_image',
         'password',
     ];
+
+    /**
+     * Appended attributes (computed).
+     *
+     * @var list<string>
+     */
+    protected $appends = ['profile_image_url'];
 
     /**
      * The attributes that should be hidden for serialization.
@@ -72,5 +80,17 @@ class User extends Authenticatable implements MustVerifyEmail
             'updated_at' => 'datetime',
             'password' => 'hashed',
         ];
+    }
+
+    /**
+     * Get the full URL for the user's profile image.
+     */
+    public function getProfileImageUrlAttribute(): ?string
+    {
+        if (!$this->profile_image) {
+            return null;
+        }
+
+        return asset('storage/' . $this->profile_image);
     }
 }

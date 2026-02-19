@@ -22,6 +22,7 @@ Route::post('/email/verification-notification', [AuthController::class, 'resendV
 Route::middleware('auth:sanctum')->group(function () {
     Route::post('/logout', [AuthController::class, 'logout']);
     Route::get('/user', [AuthController::class, 'user']);
+    Route::post('/user/profile-image', [AuthController::class, 'uploadProfileImage']);
     
     // Add your other protected routes here
     Route::get('/test', function () {

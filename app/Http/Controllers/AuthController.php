@@ -8,9 +8,12 @@ use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Password;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
+use Intervention\Image\Laravel\Facades\Image;
+use Intervention\Image\Encoders\JpegEncoder;
 
 class AuthController extends Controller
 {
@@ -105,6 +108,48 @@ class AuthController extends Controller
         return response()->json([
             'user' => $request->user(),
         ]);
+    }
+
+    /**
+     * Upload and update the authenticated user's profile image.
+     * Image is cropped/resized to 250x250 and saved as JPEG (quality 85).
+     */
+    public function uploadProfileImage(Request $request): JsonResponse
+    {
+        $request->validate([
+            'image' => ['required', 'image', 'mimes:jpeg,png,gif,webp', 'max:10240'], // 10MB max upload
+        ]);
+
+        $user = $request->user();
+        $file = $request->file('image');
+
+        try {
+            $image = Image::read($file->getRealPath());
+            $image->cover(250, 250, 'center');
+
+            $encoder = new JpegEncoder(quality: 85);
+            $encoded = $image->encode($encoder);
+
+            $filename = 'profile-images/' . $user->id . '_' . now()->timestamp . '.jpg';
+
+            Storage::disk('public')->put($filename, (string) $encoded);
+
+            // Delete previous profile image if it exists
+            if ($user->profile_image) {
+                Storage::disk('public')->delete($user->profile_image);
+            }
+
+            $user->update(['profile_image' => $filename]);
+
+            return response()->json([
+                'user' => $user->fresh(),
+                'message' => 'Profile image updated successfully.',
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'message' => 'Failed to process image. Please try another file.',
+            ], 422);
+        }
     }
 
     /**
