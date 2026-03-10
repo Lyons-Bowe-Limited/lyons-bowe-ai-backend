@@ -117,7 +117,7 @@ class AuthController extends Controller
     public function uploadProfileImage(Request $request): JsonResponse
     {
         $request->validate([
-            'image' => ['required', 'image', 'mimes:jpeg,png,gif,webp', 'max:10240'], // 10MB max upload
+            'image' => ['required', 'image', 'mimes:jpg,jpeg,png', 'max:10240'], // 10MB max upload
         ]);
 
         $user = $request->user();
@@ -150,6 +150,66 @@ class AuthController extends Controller
                 'message' => 'Failed to process image. Please try another file.',
             ], 422);
         }
+    }
+
+    /**
+     * Update authenticated user's personal information (name, email, contact_number)
+     */
+    public function updateProfile(Request $request): JsonResponse
+    {
+        $request->headers->set('Accept', 'application/json');
+        
+        $user = $request->user();
+        
+        // Normalize 'contact' to 'contact_number' if present
+        if ($request->has('contact') && !$request->has('contact_number')) {
+            $request->merge(['contact_number' => $request->contact]);
+        }
+        
+        $validated = $request->validate([
+            'name' => 'sometimes|required|string|max:255',
+            'email' => ['sometimes', 'required', 'string', 'email', 'max:255', 'unique:users,email,' . $user->id],
+            'contact_number' => ['sometimes', 'required', 'string', 'max:20', new UkPhoneNumber()],
+        ]);
+
+        $user->update($validated);
+
+        return response()->json([
+            'user' => $user->fresh(),
+            'message' => 'Personal information updated successfully.',
+        ]);
+    }
+
+    /**
+     * Update authenticated user's password
+     */
+    public function updatePassword(Request $request): JsonResponse
+    {
+        $request->headers->set('Accept', 'application/json');
+        
+        $user = $request->user();
+        
+        $validated = $request->validate([
+            'current_password' => 'required|string',
+            'new_password' => 'required|string|min:8',
+            'confirm_password' => 'required|string|same:new_password',
+        ]);
+
+        // Verify current password
+        if (!Hash::check($validated['current_password'], $user->password)) {
+            throw ValidationException::withMessages([
+                'current_password' => ['The current password is incorrect.'],
+            ]);
+        }
+
+        // Update password
+        $user->update([
+            'password' => Hash::make($validated['new_password']),
+        ]);
+
+        return response()->json([
+            'message' => 'Password updated successfully.',
+        ]);
     }
 
     /**
