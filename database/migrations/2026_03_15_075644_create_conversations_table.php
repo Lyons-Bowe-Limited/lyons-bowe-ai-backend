@@ -13,6 +13,10 @@ return new class extends Migration
     {
         Schema::create('conversations', function (Blueprint $table) {
             $table->id();
+            $table->foreignId('lead_id')->nullable()->constrained()->nullOnDelete();
+            $table->string('session_id')->unique();
+            $table->string('channel')->default('web'); // web, whatsapp, voice
+            $table->string('status')->default('active'); // active, completed
             $table->timestamps();
         });
     }
