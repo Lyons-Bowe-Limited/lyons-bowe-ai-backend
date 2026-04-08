@@ -1,0 +1,46 @@
+name: Deploy Laravel
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+
+jobs:
+  deploy-prod:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Deploy to Production
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.PROD_HOST }}
+          username: root
+          key: ${{ secrets.PROD_SSH_KEY }}
+          script: |
+            cd /var/www/lyons-bowe-ai-backend
+            git pull origin main
+            php artisan config:clear
+            php artisan cache:clear
+            php artisan config:cache
+            php artisan migrate --force
+
+  deploy-staging:
+    if: github.ref == 'refs/heads/develop'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Deploy to Staging
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.STAGING_HOST }}
+          username: root
+          key: ${{ secrets.STAGING_SSH_KEY }}
+          script: |
+            cd /var/www/lyons-bowe-ai-backend
+            git pull origin develop
+            php artisan config:clear
+            php artisan cache:clear
+            php artisan config:cache
+            php artisan migrate --force

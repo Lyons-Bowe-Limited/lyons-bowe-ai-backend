@@ -45,8 +45,10 @@ class AuthController extends Controller
             'password' => Hash::make($request->password),
         ]);
 
-        // Send email verification notification
-        $user->sendEmailVerificationNotification();
+        // Send after the JSON response so nginx does not 504 while SMTP is slow
+        dispatch(function () use ($user) {
+            $user->sendEmailVerificationNotification();
+        })->afterResponse();
 
         $token = $user->createToken('auth_token')->plainTextToken;
 
@@ -288,7 +290,10 @@ class AuthController extends Controller
             ], 400);
         }
 
-        $request->user()->sendEmailVerificationNotification();
+        $user = $request->user();
+        dispatch(function () use ($user) {
+            $user->sendEmailVerificationNotification();
+        })->afterResponse();
 
         return response()->json([
             'message' => 'Verification email sent.',
