@@ -19,17 +19,13 @@ jobs:
           username: root
           key: ${{ secrets.PROD_SSH_KEY }}
           script: |
+            set -e
             cd /var/www/lyons-bowe-ai-backend
             git pull origin main
-            composer install --no-dev --optimize-autoloader
             php artisan config:clear
             php artisan cache:clear
-            php artisan route:clear
-            php artisan view:clear
             php artisan config:cache
-            php artisan route:cache
             php artisan migrate --force
-            sudo systemctl restart php8.3-fpm
 
   deploy-staging:
     if: github.ref == 'refs/heads/develop'
