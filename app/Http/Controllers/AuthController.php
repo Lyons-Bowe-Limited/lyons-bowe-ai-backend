@@ -30,20 +30,20 @@ class AuthController extends Controller
             $request->merge(['contact_number' => $request->contact]);
         }
         
-        $request->validate([
-            'name' => 'required|string|max:255',
-            'email' => 'required|string|email|max:255|unique:users',
-            'contact_number' => ['required', 'string', 'max:20', new UkPhoneNumber()],
-            'password' => 'required|string|min:8|confirmed',
-        ]);
-
-        // $user = User::create([
-        //     'name' => $request->name,
-        //     'email' => $request->email,
-        //     'email_verified_at' => $request->email_verified_at,
-        //     'contact_number' => $request->contact_number,
-        //     'password' => Hash::make($request->password),
+        // $request->validate([
+        //     'name' => 'required|string|max:255',
+        //     'email' => 'required|string|email|max:255|unique:users',
+        //     'contact_number' => ['required', 'string', 'max:20', new UkPhoneNumber()],
+        //     'password' => 'required|string|min:8|confirmed',
         // ]);
+
+        $user = User::create([
+            'name' => $request->name,
+            'email' => $request->email,
+            'email_verified_at' => $request->email_verified_at,
+            'contact_number' => $request->contact_number,
+            'password' => Hash::make($request->password),
+        ]);
 
         return response()->json([
             'status' => 'USER_CREATED',
