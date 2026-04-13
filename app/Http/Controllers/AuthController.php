@@ -37,13 +37,13 @@ class AuthController extends Controller
             'password' => 'required|string|min:8|confirmed',
         ]);
 
-        $user = User::create([
-            'name' => $request->name,
-            'email' => $request->email,
-            'email_verified_at' => $request->email_verified_at,
-            'contact_number' => $request->contact_number,
-            'password' => Hash::make($request->password),
-        ]);
+        // $user = User::create([
+        //     'name' => $request->name,
+        //     'email' => $request->email,
+        //     'email_verified_at' => $request->email_verified_at,
+        //     'contact_number' => $request->contact_number,
+        //     'password' => Hash::make($request->password),
+        // ]);
 
         return response()->json([
             'status' => 'USER_CREATED',
