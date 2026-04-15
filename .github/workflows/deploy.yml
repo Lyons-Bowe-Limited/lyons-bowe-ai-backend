@@ -8,11 +8,12 @@ on:
 
 jobs:
   deploy-prod:
+    name: Deploy to Production
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
 
     steps:
-      - name: Deploy to Production
+      - name: Deploy via SSH
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.PROD_HOST }}
@@ -20,20 +21,35 @@ jobs:
           key: ${{ secrets.PROD_SSH_KEY }}
           script: |
             set -e
+
             cd /var/www/lyons-bowe-ai-backend
+
+            echo "Deploying PROD..."
+
             git fetch origin
             git checkout main
             git reset --hard origin/main
+
+            composer install --no-dev --optimize-autoloader
+
             php artisan optimize:clear
+            php artisan config:cache
+            php artisan route:cache
+
             php artisan migrate --force
+
             sudo systemctl restart php8.3-fpm
 
+            echo "Production deploy complete"
+
+
   deploy-staging:
+    name: Deploy to Staging
     if: github.ref == 'refs/heads/develop'
     runs-on: ubuntu-latest
 
     steps:
-      - name: Deploy to Staging
+      - name: Deploy via SSH
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.STAGING_HOST }}
@@ -41,10 +57,23 @@ jobs:
           key: ${{ secrets.STAGING_SSH_KEY }}
           script: |
             set -e
+
             cd /var/www/lyons-bowe-ai-backend
+
+            echo "Deploying STAGING..."
+
             git fetch origin
             git checkout develop
             git reset --hard origin/develop
+
+            composer install --no-dev --optimize-autoloader
+
             php artisan optimize:clear
+            php artisan config:cache
+            php artisan route:cache
+
             php artisan migrate --force
+
             sudo systemctl restart php8.3-fpm
+
+            echo "Staging deploy complete"
