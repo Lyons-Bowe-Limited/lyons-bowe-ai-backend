@@ -33,7 +33,7 @@ class AuthController extends Controller
         $request->validate([
             'name' => 'required|string|max:255',
             'email' => 'required|string|email|max:255|unique:users',
-            'contact_number' => ['required', 'string', 'max:20', new UkPhoneNumber()],//remove in order to take files from outside countries.
+            'contact_number' => ['required', 'string', 'max:20', new UkPhoneNumber()],// Remove in order to take files from outside countries.
             'password' => 'required|string|min:8|confirmed',
         ]);
 
