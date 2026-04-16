@@ -13,7 +13,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Deploy via SSH
+      - name: Deploy to Production
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.PROD_HOST }}
@@ -24,7 +24,7 @@ jobs:
 
             cd /var/www/lyons-bowe-ai-backend
 
-            echo "Deploying PROD..."
+            echo "🚀 Deploying PRODUCTION..."
 
             git fetch origin
             git checkout main
@@ -38,9 +38,27 @@ jobs:
 
             php artisan migrate --force
 
-            sudo systemctl restart php8.3-fpm
+            sudo systemctl restart php*-fpm
 
-            echo "Production deploy complete"
+            echo "✅ Production deploy complete"
+
+      - name: Notify Teams (Production Success)
+        if: success()
+        run: |
+          curl -H "Content-Type: application/json" \
+          -d '{
+            "text": "🚀 Production Deployment SUCCESS\nRepo: ${{ github.repository }}\nBranch: main\nCommit: ${{ github.sha }}"
+          }' \
+          ${{ secrets.TEAMS_WEBHOOK_PROD }}
+
+      - name: Notify Teams (Production Failure)
+        if: failure()
+        run: |
+          curl -H "Content-Type: application/json" \
+          -d '{
+            "text": "❌ Production Deployment FAILED\nRepo: ${{ github.repository }}\nBranch: main\nCheck GitHub Actions logs."
+          }' \
+          ${{ secrets.TEAMS_WEBHOOK_PROD }}
 
 
   deploy-staging:
@@ -49,7 +67,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Deploy via SSH
+      - name: Deploy to Staging
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.STAGING_HOST }}
@@ -60,11 +78,38 @@ jobs:
 
             cd /var/www/lyons-bowe-ai-backend
 
+            echo "🧪 Deploying STAGING..."
+
             git fetch origin
             git checkout develop
             git reset --hard origin/develop
 
+            composer install --no-dev --optimize-autoloader
+
             php artisan optimize:clear
+            php artisan config:cache
+            php artisan route:cache
+
             php artisan migrate --force
 
             sudo systemctl restart php*-fpm
+
+            echo "✅ Staging deploy complete"
+
+      - name: Notify Teams (Staging Success)
+        if: success()
+        run: |
+          curl -H "Content-Type: application/json" \
+          -d '{
+            "text": "🧪 Staging Deployment SUCCESS\nRepo: ${{ github.repository }}\nBranch: develop\nCommit: ${{ github.sha }}"
+          }' \
+          ${{ secrets.TEAMS_WEBHOOK_STAGING }}
+
+      - name: Notify Teams (Staging Failure)
+        if: failure()
+        run: |
+          curl -H "Content-Type: application/json" \
+          -d '{
+            "text": "❌ Staging Deployment FAILED\nRepo: ${{ github.repository }}\nBranch: develop\nCheck GitHub Actions logs."
+          }' \
+          ${{ secrets.TEAMS_WEBHOOK_STAGING }}
