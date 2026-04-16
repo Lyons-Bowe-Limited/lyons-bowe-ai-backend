@@ -47,7 +47,7 @@ jobs:
         run: |
           curl -H "Content-Type: application/json" \
           -d '{
-            "text": "🚀 Production Deployment SUCCESS\nRepo: ${{ github.repository }}\nBranch: main\nCommit: ${{ github.sha }}"
+            "text": "🚀 Production Deployment SUCCESS\nRepo: ${{ github.repository }}\nBranch: main\nCommit: ${{ github.sha }}\nMessage: ${{ github.event.head_commit.message }}"
           }' \
           ${{ secrets.TEAMS_WEBHOOK_PROD }}
 
@@ -101,7 +101,7 @@ jobs:
         run: |
           curl -H "Content-Type: application/json" \
           -d '{
-            "text": "🧪 Staging Deployment SUCCESS\nRepo: ${{ github.repository }}\nBranch: develop\nCommit: ${{ github.sha }}"
+            "text": "🧪 Staging Deployment SUCCESS\nRepo: ${{ github.repository }}\nBranch: develop\nCommit: ${{ github.sha }}\nMessage: ${{ github.event.head_commit.message }}"
           }' \
           ${{ secrets.TEAMS_WEBHOOK_STAGING }}
 
