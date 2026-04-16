@@ -24,7 +24,7 @@ jobs:
 
             cd /var/www/lyons-bowe-ai-backend
 
-            echo "🚀 Deploying PRODUCTION..."
+            echo "Deploying production..."
 
             git fetch origin
             git checkout main
@@ -40,24 +40,24 @@ jobs:
 
             sudo systemctl restart php*-fpm
 
-            echo "✅ Production deploy complete"
+            echo "Production deploy complete"
 
       - name: Notify Teams (Production Success)
         if: success()
         run: |
           curl -H "Content-Type: application/json" \
-          -d '{
-            "text": "🚀 Production Deployment SUCCESS\nRepo: ${{ github.repository }}\nBranch: main\nCommit: ${{ github.sha }}"
-          }' \
+          -d "{
+            \"text\": \"PROD BACKEND • Deployment Successful\n\nRepository: ${{ github.repository }}\nBranch: main\nTriggered by: ${{ github.actor }}\n\nCommit:\n${{ github.event.head_commit.message }}\n\nhttps://github.com/${{ github.repository }}/commit/${{ github.sha }}\"
+          }" \
           ${{ secrets.TEAMS_WEBHOOK_PROD }}
 
       - name: Notify Teams (Production Failure)
         if: failure()
         run: |
           curl -H "Content-Type: application/json" \
-          -d '{
-            "text": "❌ Production Deployment FAILED\nRepo: ${{ github.repository }}\nBranch: main\nCheck GitHub Actions logs."
-          }' \
+          -d "{
+            \"text\": \"PROD BACKEND • Deployment Failed\n\nRepository: ${{ github.repository }}\nBranch: main\nTriggered by: ${{ github.actor }}\n\nCommit:\n${{ github.event.head_commit.message }}\n\nhttps://github.com/${{ github.repository }}/commit/${{ github.sha }}\n\nCheck GitHub Actions logs.\"
+          }" \
           ${{ secrets.TEAMS_WEBHOOK_PROD }}
 
 
@@ -78,7 +78,7 @@ jobs:
 
             cd /var/www/lyons-bowe-ai-backend
 
-            echo "🧪 Deploying STAGING..."
+            echo "Deploying staging..."
 
             git fetch origin
             git checkout develop
@@ -94,22 +94,22 @@ jobs:
 
             sudo systemctl restart php*-fpm
 
-            echo "✅ Staging deploy complete"
+            echo "Staging deploy complete"
 
       - name: Notify Teams (Staging Success)
         if: success()
         run: |
           curl -H "Content-Type: application/json" \
-          -d '{
-            "text": "🧪 Staging Deployment SUCCESS\nRepo: ${{ github.repository }}\nBranch: develop\nCommit: ${{ github.sha }}"
-          }' \
+          -d "{
+            \"text\": \"STAGING BACKEND • Deployment Successful\n\nRepository: ${{ github.repository }}\nBranch: develop\nTriggered by: ${{ github.actor }}\n\nCommit:\n${{ github.event.head_commit.message }}\n\nhttps://github.com/${{ github.repository }}/commit/${{ github.sha }}\"
+          }" \
           ${{ secrets.TEAMS_WEBHOOK_STAGING }}
 
       - name: Notify Teams (Staging Failure)
         if: failure()
         run: |
           curl -H "Content-Type: application/json" \
-          -d '{
-            "text": "❌ Staging Deployment FAILED\nRepo: ${{ github.repository }}\nBranch: develop\nCheck GitHub Actions logs."
-          }' \
+          -d "{
+            \"text\": \"STAGING BACKEND • Deployment Failed\n\nRepository: ${{ github.repository }}\nBranch: develop\nTriggered by: ${{ github.actor }}\n\nCommit:\n${{ github.event.head_commit.message }}\n\nhttps://github.com/${{ github.repository }}/commit/${{ github.sha }}\n\nCheck GitHub Actions logs.\"
+          }" \
           ${{ secrets.TEAMS_WEBHOOK_STAGING }}
