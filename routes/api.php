@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\AuthController;
 use Illuminate\Support\Facades\Route;
+use App\Services\GraphMailService;
 
 // Authentication routes
 Route::post('/register', [AuthController::class, 'register']);
@@ -30,5 +31,16 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/test', function () {
         return response()->json(['message' => 'Authenticated successfully']);
     });
+});
+
+// Graph mail test route
+Route::get('/test-graph-mail', function (GraphMailService $mail) {
+    $mail->send(
+        'leigh@leighsmith.co.za',
+        'Graph mail test',
+        '<p>Graph mail is working.</p>'
+    );
+
+    return response()->json(['message' => 'sent']);
 });
 
