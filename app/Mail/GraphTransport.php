@@ -2,33 +2,27 @@
 
 namespace App\Mail;
 
-use Symfony\Component\Mailer\Transport\AbstractTransport;
+use Symfony\Component\Mailer\SentMessage;
 use Symfony\Component\Mime\Email;
-use App\Services\GraphMailService;
 
-class GraphTransport extends AbstractTransport
+protected function doSend(SentMessage $message): void
 {
-    protected $graph;
+    $original = $message->getOriginalMessage();
 
-    public function __construct(GraphMailService $graph)
-    {
-        parent::__construct();
-        $this->graph = $graph;
+    if (!$original instanceof Email) {
+        return;
     }
 
-    protected function doSend(\Symfony\Component\Mime\RawMessage $message, $envelope = null): void
-    {
-        $email = Email::fromString($message->toString());
+    $to = collect($original->getTo())->map(fn ($a) => $a->getAddress())->toArray();
 
-        $this->graph->sendMail(
-            $email->getTo()[0]->getAddress(),
-            $email->getSubject(),
-            $email->getHtmlBody() ?? $email->getTextBody()
-        );
-    }
+    $subject = $original->getSubject();
 
-    public function __toString(): string
-    {
-        return 'graph';
-    }
+    $body = $original->getHtmlBody() ?? $original->getTextBody();
+
+    \Log::info('GRAPH TRANSPORT HIT', [
+        'to' => $to,
+        'subject' => $subject,
+    ]);
+
+    $this->graph->sendMail($to, $subject, $body);
 }
