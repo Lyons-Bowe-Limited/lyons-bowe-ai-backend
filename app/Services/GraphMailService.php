@@ -11,7 +11,11 @@ class GraphMailService
     {
         $tenantId = config('services.graph.tenant_id');
         $clientId = config('services.graph.client_id');
-        $certPath = base_path(config('services.graph.cert_path'));
+        $certPath = config('services.graph.cert_path');
+
+        if (! str_starts_with($certPath, '/')) {
+            $certPath = base_path($certPath);
+        }
 
         $pem = file_get_contents($certPath);
 
