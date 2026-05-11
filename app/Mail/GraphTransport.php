@@ -2,27 +2,48 @@
 
 namespace App\Mail;
 
+use App\Services\GraphMailService;
 use Symfony\Component\Mailer\SentMessage;
+use Symfony\Component\Mailer\Transport\AbstractTransport;
 use Symfony\Component\Mime\Email;
 
-protected function doSend(SentMessage $message): void
+class GraphTransport extends AbstractTransport
 {
-    $original = $message->getOriginalMessage();
+    protected GraphMailService $graph;
 
-    if (!$original instanceof Email) {
-        return;
+    public function __construct(GraphMailService $graph)
+    {
+        parent::__construct();
+
+        $this->graph = $graph;
     }
 
-    $to = collect($original->getTo())->map(fn ($a) => $a->getAddress())->toArray();
+    protected function doSend(SentMessage $message): void
+    {
+        $original = $message->getOriginalMessage();
 
-    $subject = $original->getSubject();
+        if (!$original instanceof Email) {
+            return;
+        }
 
-    $body = $original->getHtmlBody() ?? $original->getTextBody();
+        $to = collect($original->getTo())
+            ->map(fn ($address) => $address->getAddress())
+            ->toArray();
 
-    \Log::info('GRAPH TRANSPORT HIT', [
-        'to' => $to,
-        'subject' => $subject,
-    ]);
+        $subject = $original->getSubject();
 
-    $this->graph->sendMail($to, $subject, $body);
+        $body = $original->getHtmlBody() ?? $original->getTextBody();
+
+        \Log::info('GRAPH TRANSPORT HIT', [
+            'to' => $to,
+            'subject' => $subject,
+        ]);
+
+        $this->graph->sendMail($to, $subject, $body);
+    }
+
+    public function __toString(): string
+    {
+        return 'graph';
+    }
 }
