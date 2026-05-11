@@ -37,6 +37,10 @@ return [
 
     'mailers' => [
 
+        'graph' => [
+            'transport' => 'graph',
+        ],
+
         'smtp' => [
             'transport' => 'smtp',
             'host' => env('MAIL_HOST', '127.0.0.1'),

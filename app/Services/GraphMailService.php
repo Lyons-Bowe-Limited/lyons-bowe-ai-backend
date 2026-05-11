@@ -67,31 +67,31 @@ class GraphMailService
         return $response->json('access_token');
     }
 
-    public function send(string $to, string $subject, string $html): void
+    public function sendMail($to, $subject, $body)
     {
-        $mailbox = config('services.graph.mailbox');
+        $token = $this->accessToken();
 
-        $response = Http::withToken($this->accessToken())
-            ->post("https://graph.microsoft.com/v1.0/users/{$mailbox}/sendMail", [
-                'message' => [
-                    'subject' => $subject,
-                    'body' => [
-                        'contentType' => 'HTML',
-                        'content' => $html,
-                    ],
-                    'toRecipients' => [
-                        [
-                            'emailAddress' => [
-                                'address' => $to,
-                            ],
-                        ],
-                    ],
+        $recipients = collect($to)->map(fn ($email) => [
+            "emailAddress" => ["address" => $email]
+        ])->toArray();
+
+        $email = [
+            "message" => [
+                "subject" => $subject,
+                "body" => [
+                    "contentType" => "HTML",
+                    "content" => $body
                 ],
-                'saveToSentItems' => true,
-            ]);
+                "toRecipients" => $recipients
+            ]
+        ];
 
-        if ($response->failed()) {
-            throw new \Exception('Graph mail failed: ' . $response->body());
-        }
+        $response = Http::withToken($token)
+            ->post('https://graph.microsoft.com/v1.0/users/' . config('services.graph.mailbox') . '/sendMail', $email);
+
+        \Log::info('GRAPH SEND RESPONSE', [
+            'status' => $response->status(),
+            'body' => $response->body(),
+        ]);
     }
 }
