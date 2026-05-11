@@ -69,7 +69,7 @@ class GraphMailService
 
     public function sendMail($to, $subject, $body)
     {
-        $token = $this->getAccessToken();
+        $token = $this->accessToken();
 
         $recipients = collect($to)->map(fn ($email) => [
             "emailAddress" => ["address" => $email]
@@ -87,7 +87,7 @@ class GraphMailService
         ];
 
         $response = Http::withToken($token)
-            ->post("https://graph.microsoft.com/v1.0/users/{$this->mailbox}/sendMail", $email);
+            ->post('https://graph.microsoft.com/v1.0/users/' . config('services.graph.mailbox') . '/sendMail', $email);
 
         \Log::info('GRAPH SEND RESPONSE', [
             'status' => $response->status(),
