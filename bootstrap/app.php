@@ -3,6 +3,8 @@
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
+use Illuminate\Http\Exceptions\PostTooLargeException;
+use Illuminate\Http\Request;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
@@ -20,7 +22,17 @@ return Application::configure(basePath: dirname(__DIR__))
             if ($request->is('api/*')) {
                 return true;
             }
-            
+
             return $request->expectsJson();
+        });
+
+        $exceptions->renderable(function (PostTooLargeException $e, Request $request) {
+            if ($request->is('api/*')) {
+                return response()->json([
+                    'message' => 'The upload is larger than this server is configured to accept, so the request never reached the application. Try a smaller photo. If you control the server, raise nginx client_max_body_size and PHP post_max_size / upload_max_filesize to at least 16M.',
+                ], 413);
+            }
+
+            return null;
         });
     })->create();

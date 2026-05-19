@@ -3,6 +3,7 @@
 use App\Http\Controllers\AuthController;
 use Illuminate\Support\Facades\Route;
 use App\Services\GraphMailService;
+use App\Http\Controllers\AiPlaygroundController;
 
 // Authentication routes
 Route::post('/register', [AuthController::class, 'register']);
@@ -33,14 +34,6 @@ Route::middleware('auth:sanctum')->group(function () {
     });
 });
 
-// Graph mail test route
-Route::get('/test-graph-mail', function (GraphMailService $mail) {
-    $mail->send(
-        'leigh@leighsmith.co.za',
-        'Graph mail test',
-        '<p>Graph mail is working.</p>'
-    );
-
-    return response()->json(['message' => 'sent']);
-});
+// AI Playground routes
+Route::post('/ai/playground/chat', [AiPlaygroundController::class, 'chat']);
 

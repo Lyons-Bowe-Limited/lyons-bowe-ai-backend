@@ -4,19 +4,22 @@ namespace App\Http\Controllers;
 
 use App\Models\User;
 use App\Rules\UkPhoneNumber;
-use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Password;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
-use Intervention\Image\Laravel\Facades\Image;
 use Intervention\Image\Encoders\JpegEncoder;
+use Intervention\Image\Laravel\Facades\Image;
 
 class AuthController extends Controller
 {
+    /** Maximum profile image upload size in kilobytes (Laravel file max rule). 14336 KB ≈ 14 MiB. */
+    private const PROFILE_IMAGE_MAX_KB = 14336;
+
     /**
      * Register a new user
      */
@@ -24,16 +27,16 @@ class AuthController extends Controller
     {
         // Ensure API requests always expect JSON
         $request->headers->set('Accept', 'application/json');
-        
+
         // Normalize 'contact' to 'contact_number' if present
-        if ($request->has('contact') && !$request->has('contact_number')) {
+        if ($request->has('contact') && ! $request->has('contact_number')) {
             $request->merge(['contact_number' => $request->contact]);
         }
-        
+
         $request->validate([
             'name' => 'required|string|max:255',
             'email' => 'required|string|email|max:255|unique:users',
-            'contact_number' => ['required', 'string', 'max:20', new UkPhoneNumber()],// Remove in order to take files from outside countries.
+            'contact_number' => ['required', 'string', 'max:20', new UkPhoneNumber], // Remove in order to take files from outside countries.
             'password' => 'required|string|min:8|confirmed',
         ]);
 
@@ -67,7 +70,7 @@ class AuthController extends Controller
     {
         // Ensure API requests always expect JSON
         $request->headers->set('Accept', 'application/json');
-        
+
         $request->validate([
             'email' => 'required|email',
             'password' => 'required',
@@ -75,7 +78,7 @@ class AuthController extends Controller
 
         $user = User::where('email', $request->email)->first();
 
-        if (!$user || !Hash::check($request->password, $user->password)) {
+        if (! $user || ! Hash::check($request->password, $user->password)) {
             throw ValidationException::withMessages([
                 'email' => ['The provided credentials are incorrect.'],
             ]);
@@ -115,11 +118,25 @@ class AuthController extends Controller
     /**
      * Upload and update the authenticated user's profile image.
      * Image is cropped/resized to 250x250 and saved as JPEG (quality 85).
+     * HEIC is accepted when the client sends the correct MIME type; decoding requires a capable driver (often ImageMagick with HEIC) on the server.
      */
     public function uploadProfileImage(Request $request): JsonResponse
     {
+        $maxKb = self::PROFILE_IMAGE_MAX_KB;
+        $maxMbLabel = (string) (int) ($maxKb / 1024);
+
         $request->validate([
-            'image' => ['required', 'image', 'mimes:jpg,jpeg,png', 'max:10240'], // 10MB max upload
+            'image' => [
+                'required',
+                'file',
+                'max:'.$maxKb,
+                'mimetypes:image/jpeg,image/png,image/webp,image/heic,image/heif,image/heif-sequence,image/heic-sequence',
+            ],
+        ], [
+            'image.required' => 'Please choose a photo to upload.',
+            'image.file' => 'The upload was not recognized as a valid file. Please try again.',
+            'image.max' => "That photo is too large. The maximum size is {$maxMbLabel} MB.",
+            'image.mimetypes' => 'That file type is not supported. Use a JPEG, PNG, WebP, or HEIC photo from your camera or library.',
         ]);
 
         $user = $request->user();
@@ -132,7 +149,7 @@ class AuthController extends Controller
             $encoder = new JpegEncoder(quality: 85);
             $encoded = $image->encode($encoder);
 
-            $filename = 'profile-images/' . $user->id . '_' . now()->timestamp . '.jpg';
+            $filename = 'profile-images/'.$user->id.'_'.now()->timestamp.'.jpg';
 
             Storage::disk('public')->put($filename, (string) $encoded);
 
@@ -149,7 +166,7 @@ class AuthController extends Controller
             ]);
         } catch (\Exception $e) {
             return response()->json([
-                'message' => 'Failed to process image. Please try another file.',
+                'message' => 'We could not read or resize that photo. Try a JPEG or PNG, another picture from your library, or a smaller file.',
             ], 422);
         }
     }
@@ -160,18 +177,18 @@ class AuthController extends Controller
     public function updateProfile(Request $request): JsonResponse
     {
         $request->headers->set('Accept', 'application/json');
-        
+
         $user = $request->user();
-        
+
         // Normalize 'contact' to 'contact_number' if present
-        if ($request->has('contact') && !$request->has('contact_number')) {
+        if ($request->has('contact') && ! $request->has('contact_number')) {
             $request->merge(['contact_number' => $request->contact]);
         }
-        
+
         $validated = $request->validate([
             'name' => 'sometimes|required|string|max:255',
-            'email' => ['sometimes', 'required', 'string', 'email', 'max:255', 'unique:users,email,' . $user->id],
-            'contact_number' => ['sometimes', 'required', 'string', 'max:20', new UkPhoneNumber()],
+            'email' => ['sometimes', 'required', 'string', 'email', 'max:255', 'unique:users,email,'.$user->id],
+            'contact_number' => ['sometimes', 'required', 'string', 'max:20', new UkPhoneNumber],
         ]);
 
         $user->update($validated);
@@ -188,9 +205,9 @@ class AuthController extends Controller
     public function updatePassword(Request $request): JsonResponse
     {
         $request->headers->set('Accept', 'application/json');
-        
+
         $user = $request->user();
-        
+
         $validated = $request->validate([
             'current_password' => 'required|string',
             'new_password' => 'required|string|min:8',
@@ -198,7 +215,7 @@ class AuthController extends Controller
         ]);
 
         // Verify current password
-        if (!Hash::check($validated['current_password'], $user->password)) {
+        if (! Hash::check($validated['current_password'], $user->password)) {
             throw ValidationException::withMessages([
                 'current_password' => ['The current password is incorrect.'],
             ]);
@@ -229,7 +246,7 @@ class AuthController extends Controller
                         'message' => 'Email already verified.',
                     ], 400);
                 }
-                
+
                 return view('email-verification', [
                     'status' => 'already_verified',
                     'user' => $user,
@@ -237,13 +254,13 @@ class AuthController extends Controller
             }
 
             // Verify the signed URL hash
-            if (!hash_equals((string) $request->route('hash'), sha1($user->getEmailForVerification()))) {
+            if (! hash_equals((string) $request->route('hash'), sha1($user->getEmailForVerification()))) {
                 if ($request->expectsJson()) {
                     return response()->json([
                         'message' => 'Invalid verification link.',
                     ], 400);
                 }
-                
+
                 return view('email-verification', [
                     'status' => 'error',
                     'message' => 'Invalid verification link. The link may have expired or is invalid.',
@@ -307,7 +324,7 @@ class AuthController extends Controller
     {
         // Ensure API requests always expect JSON
         $request->headers->set('Accept', 'application/json');
-        
+
         $request->validate([
             'email' => 'required|email',
         ]);
@@ -335,7 +352,7 @@ class AuthController extends Controller
     {
         // Ensure API requests always expect JSON
         $request->headers->set('Accept', 'application/json');
-        
+
         $request->validate([
             'token' => 'required',
             'email' => 'required|email',
@@ -385,4 +402,3 @@ class AuthController extends Controller
         ], 400);
     }
 }
-
