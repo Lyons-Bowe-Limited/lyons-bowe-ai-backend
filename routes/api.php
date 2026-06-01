@@ -32,8 +32,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/test', function () {
         return response()->json(['message' => 'Authenticated successfully']);
     });
-});
 
-// AI Playground routes
-Route::post('/ai/playground/chat', [AiPlaygroundController::class, 'chat']);
+    //ai playground route
+    Route::middleware('auth:sanctum')->post('/ai/playground/chat', [AiPlaygroundController::class, 'chat']);
+});
 
