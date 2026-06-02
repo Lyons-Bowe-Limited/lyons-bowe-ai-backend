@@ -16,4 +16,9 @@ class AiMessage extends Model
     protected $casts = [
         'metadata' => 'array',
     ];
+
+    public function conversation()
+    {
+        return $this->belongsTo(\App\Models\AiConversation::class, 'ai_conversation_id');
+    }
 }

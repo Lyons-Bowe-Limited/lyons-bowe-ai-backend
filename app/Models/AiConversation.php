@@ -17,4 +17,9 @@ class AiConversation extends Model
     protected $casts = [
         'metadata' => 'array',
     ];
+
+    public function messages()
+    {
+        return $this->hasMany(\App\Models\AiMessage::class);
+    }
 }

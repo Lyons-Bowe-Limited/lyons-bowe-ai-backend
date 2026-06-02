@@ -4,6 +4,8 @@ use App\Http\Controllers\AuthController;
 use Illuminate\Support\Facades\Route;
 use App\Services\GraphMailService;
 use App\Http\Controllers\AiPlaygroundController;
+use App\Http\Controllers\AiConversationController;
+
 
 // Authentication routes
 Route::post('/register', [AuthController::class, 'register']);
@@ -27,6 +29,10 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::put('/user/profile', [AuthController::class, 'updateProfile']);
     Route::put('/user/password', [AuthController::class, 'updatePassword']);
     Route::post('/user/profile-image', [AuthController::class, 'uploadProfileImage']);
+
+    //fetch conversations routes
+    Route::get('/ai/conversations', [AiConversationController::class, 'index']);
+    Route::get('/ai/conversations/{uuid}', [AiConversationController::class, 'show']);
     
     // Add your other protected routes here
     Route::get('/test', function () {
