@@ -32,6 +32,8 @@ Route::middleware('auth:sanctum')->group(function () {
 
     //fetch conversations routes
     Route::get('/ai/conversations', [AiConversationController::class, 'index']);
+    Route::get('/ai/conversations/starred', [AiConversationController::class, 'starred']);
+    Route::patch('/ai/conversations/{uuid}/star', [AiConversationController::class, 'updateStar']);
     Route::get('/ai/conversations/{uuid}', [AiConversationController::class, 'show']);
     
     // Add your other protected routes here

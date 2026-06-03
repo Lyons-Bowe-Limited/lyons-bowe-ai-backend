@@ -11,11 +11,13 @@ class AiConversation extends Model
         'user_id',
         'title',
         'status',
+        'is_starred',
         'metadata',
     ];
 
     protected $casts = [
         'metadata' => 'array',
+        'is_starred' => 'boolean',
     ];
 
     public function messages()
