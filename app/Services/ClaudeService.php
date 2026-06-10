@@ -47,6 +47,12 @@ class ClaudeService
             throw new \Exception($response->body());
         }
 
-        return $response->json('content.0.text');
+        $text = $response->json('content.0.text');
+
+        if (! is_string($text) || empty(trim($text))) {
+            return 'I am only able to assist with Lyons Bowe legal services relating to Property Law, Family Law, and Wills & Probate.';
+        }
+
+        return $text;
     }
 }
