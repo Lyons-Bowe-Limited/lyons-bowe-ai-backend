@@ -91,6 +91,21 @@ class KnowledgeSearchService
             'deceased',
         ];
 
+        $generalTerms = [
+            'office',
+            'offices',
+            'location',
+            'locations',
+            'branch',
+            'branches',
+            'service',
+            'services',
+            'lyons bowe',
+            'where are you',
+            'which offices',
+            'what services',
+        ];
+
         if ($this->containsAny($message, $familyTerms)) {
             return 'family_law';
         }
@@ -101,6 +116,10 @@ class KnowledgeSearchService
 
         if ($this->containsAny($message, $propertyTerms)) {
             return 'property_law';
+        }
+
+        if ($this->containsAny($message, $generalTerms)) {
+            return 'general';
         }
 
         return null;
@@ -131,6 +150,15 @@ class KnowledgeSearchService
                 'into',
                 'need',
                 'help',
+                'about',
+                'about lyons bowe',
+                'who are lyons bowe',
+                'who are you',
+                'what is lyons bowe',
+                'company',
+                'firm',
+                'solicitors',
+                'law firm',
             ]))
             ->values();
     }
