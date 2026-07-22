@@ -5,6 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Email Verification - Lyons Bowe</title>
     <style>
+        :root {
+            --brand-navy: #00232e;
+        }
+
         * {
             margin: 0;
             padding: 0;
@@ -13,7 +17,7 @@
 
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-            background-color: #151515;
+            background-color: var(--brand-navy);
             color: #ffffff;
             min-height: 100vh;
             display: flex;
@@ -26,7 +30,8 @@
         .container {
             max-width: 600px;
             width: 100%;
-            background-color: #1a1a1a;
+            background-color: rgba(255, 255, 255, 0.06);
+            border: 1px solid rgba(255, 255, 255, 0.12);
             border-radius: 8px;
             padding: 40px;
             box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
@@ -54,7 +59,7 @@
         .logo-subtitle {
             font-size: 12px;
             font-weight: 300;
-            color: #888;
+            color: rgba(255, 255, 255, 0.65);
             text-transform: uppercase;
             letter-spacing: 1px;
         }
@@ -80,14 +85,15 @@
             align-items: center;
             justify-content: center;
             font-size: 32px;
-            color: #151515;
+            color: var(--brand-navy);
         }
 
         .error-icon {
             width: 64px;
             height: 64px;
             margin: 0 auto 24px;
-            background-color: #555555;
+            background-color: var(--brand-navy);
+            border: 1px solid rgba(255, 255, 255, 0.25);
             border-radius: 50%;
             display: flex;
             align-items: center;
@@ -98,12 +104,12 @@
 
         p {
             font-size: 16px;
-            color: #cccccc;
+            color: rgba(255, 255, 255, 0.8);
             margin-bottom: 12px;
         }
 
         .message {
-            background-color: #252525;
+            background-color: rgba(255, 255, 255, 0.06);
             border-left: 3px solid #F5D75D;
             padding: 16px 20px;
             margin: 24px 0;
@@ -119,7 +125,7 @@
             display: inline-block;
             padding: 12px 32px;
             background-color: #F5D75D;
-            color: #151515;
+            color: var(--brand-navy);
             text-decoration: none;
             border-radius: 6px;
             font-weight: 600;
@@ -133,21 +139,22 @@
         }
 
         .btn-secondary {
-            background-color: #555555;
+            background-color: var(--brand-navy);
+            border: 1px solid rgba(255, 255, 255, 0.25);
             color: #ffffff;
         }
 
         .btn-secondary:hover {
-            background-color: #666666;
+            background-color: rgba(255, 255, 255, 0.12);
         }
 
         .footer {
             margin-top: 40px;
             padding-top: 24px;
-            border-top: 1px solid #333;
+            border-top: 1px solid rgba(255, 255, 255, 0.15);
             text-align: center;
             font-size: 14px;
-            color: #888;
+            color: rgba(255, 255, 255, 0.65);
         }
 
         @media (max-width: 640px) {
