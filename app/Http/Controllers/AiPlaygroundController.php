@@ -249,6 +249,14 @@ class AiPlaygroundController extends Controller
         |--------------------------------------------------------------------------
         */
 
+        $completedEnquiry = Enquiry::query()
+            ->where('user_id', $request->user()->id)
+            ->where('conversation_id', $conversation->id)
+            ->where('status', 'completed')
+            ->with('workflow')
+            ->latest('completed_at')
+            ->first();
+
         $memory = $conversationContext->refresh(
             $conversation,
             $claude
