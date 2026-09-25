@@ -143,7 +143,7 @@ class AuthController extends Controller
         $file = $request->file('image');
 
         try {
-            $image = Image::read($file->getRealPath());
+            $image = Image::decode($file->getRealPath());
             $image->cover(250, 250, 'center');
 
             $encoder = new JpegEncoder(quality: 85);
