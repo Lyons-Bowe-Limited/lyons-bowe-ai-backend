@@ -1,0 +1,27 @@
+name: Test Backend Teams
+
+on:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Test Teams
+        run: |
+          curl -i -X POST \
+            -H "Content-Type: application/json" \
+            -d '{
+              "type": "AdaptiveCard",
+              "version": "1.4",
+              "body": [
+                {
+                  "type": "TextBlock",
+                  "text": "Backend Teams Test",
+                  "weight": "Bolder",
+                  "size": "Large"
+                }
+              ]
+            }' \
+            "${{ secrets.TEAMS_WEBHOOK_STAGING }}"

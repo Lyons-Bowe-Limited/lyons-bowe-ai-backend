@@ -42,4 +42,9 @@ return [
         'cert_path' => env('GRAPH_CERT_PATH'),
     ],
 
+    'anthropic' => [
+        'api_key' => env('ANTHROPIC_API_KEY'),
+        'model' => env('ANTHROPIC_MODEL', 'claude-sonnet-4-0'),
+    ],
+
 ];

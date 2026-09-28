@@ -45,21 +45,95 @@ jobs:
       - name: Notify Teams (Production Success)
         if: success()
         run: |
-          curl -H "Content-Type: application/json" \
-          -d "{
-            \"text\": \"PROD BACKEND • Deployment Successful\n\nRepository: ${{ github.repository }}\nBranch: main\nTriggered by: ${{ github.actor }}\n\nCommit:\n${{ github.event.head_commit.message }}\n\nhttps://github.com/${{ github.repository }}/commit/${{ github.sha }}\"
-          }" \
-          ${{ secrets.TEAMS_WEBHOOK_PROD }}
+          curl -i -X POST \
+            -H "Content-Type: application/json" \
+            -d '{
+              "type": "AdaptiveCard",
+              "version": "1.4",
+              "body": [
+                {
+                  "type": "TextBlock",
+                  "text": "PROD BACKEND • Deployment Successful",
+                  "weight": "Bolder",
+                  "size": "Large"
+                },
+                {
+                  "type": "TextBlock",
+                  "text": "Repository: ${{ github.repository }}",
+                  "wrap": true
+                },
+                {
+                  "type": "TextBlock",
+                  "text": "Branch: main",
+                  "wrap": true
+                },
+                {
+                  "type": "TextBlock",
+                  "text": "Triggered by: ${{ github.actor }}",
+                  "wrap": true
+                },
+                {
+                  "type": "TextBlock",
+                  "text": "Commit: ${{ github.event.head_commit.message }}",
+                  "wrap": true
+                },
+                {
+                  "type": "TextBlock",
+                  "text": "URL: https://github.com/${{ github.repository }}/commit/${{ github.sha }}",
+                  "wrap": true
+                }
+              ]
+            }' \
+            "${{ secrets.TEAMS_WEBHOOK_PROD }}"
 
       - name: Notify Teams (Production Failure)
         if: failure()
         run: |
-          curl -H "Content-Type: application/json" \
-          -d "{
-            \"text\": \"PROD BACKEND • Deployment Failed\n\nRepository: ${{ github.repository }}\nBranch: main\nTriggered by: ${{ github.actor }}\n\nCommit:\n${{ github.event.head_commit.message }}\n\nhttps://github.com/${{ github.repository }}/commit/${{ github.sha }}\n\nCheck GitHub Actions logs.\"
-          }" \
-          ${{ secrets.TEAMS_WEBHOOK_PROD }}
-
+          curl -i -X POST \
+            -H "Content-Type: application/json" \
+            -d '{
+              "type": "AdaptiveCard",
+              "version": "1.4",
+              "body": [
+                {
+                  "type": "TextBlock",
+                  "text": "PROD BACKEND • Deployment Failed",
+                  "weight": "Bolder",
+                  "size": "Large"
+                },
+                {
+                  "type": "TextBlock",
+                  "text": "Repository: ${{ github.repository }}",
+                  "wrap": true
+                },
+                {
+                  "type": "TextBlock",
+                  "text": "Branch: main",
+                  "wrap": true
+                },
+                {
+                  "type": "TextBlock",
+                  "text": "Triggered by: ${{ github.actor }}",
+                  "wrap": true
+                },
+                {
+                  "type": "TextBlock",
+                  "text": "Commit: ${{ github.event.head_commit.message }}",
+                  "wrap": true
+                },
+                {
+                  "type": "TextBlock",
+                  "text": "Check GitHub Actions logs.",
+                  "wrap": true
+                },
+                {
+                  "type": "TextBlock",
+                  "text": "URL: https://github.com/${{ github.repository }}/commit/${{ github.sha }}",
+                  "wrap": true
+                }
+              ]
+            }' \
+            "${{ secrets.TEAMS_WEBHOOK_PROD }}"
 
   deploy-staging:
     name: Deploy to Staging
@@ -99,17 +173,92 @@ jobs:
       - name: Notify Teams (Staging Success)
         if: success()
         run: |
-          curl -H "Content-Type: application/json" \
-          -d "{
-            \"text\": \"STAGING BACKEND • Deployment Successful\n\nRepository: ${{ github.repository }}\nBranch: develop\nTriggered by: ${{ github.actor }}\n\nCommit:\n${{ github.event.head_commit.message }}\n\nhttps://github.com/${{ github.repository }}/commit/${{ github.sha }}\"
-          }" \
-          ${{ secrets.TEAMS_WEBHOOK_STAGING }}
+          curl -i -X POST \
+            -H "Content-Type: application/json" \
+            -d '{
+              "type": "AdaptiveCard",
+              "version": "1.4",
+              "body": [
+                {
+                  "type": "TextBlock",
+                  "text": "STAGING BACKEND • Deployment Successful",
+                  "weight": "Bolder",
+                  "size": "Large"
+                },
+                {
+                  "type": "TextBlock",
+                  "text": "Repository: ${{ github.repository }}",
+                  "wrap": true
+                },
+                {
+                  "type": "TextBlock",
+                  "text": "Branch: develop",
+                  "wrap": true
+                },
+                {
+                  "type": "TextBlock",
+                  "text": "Triggered by: ${{ github.actor }}",
+                  "wrap": true
+                },
+                {
+                  "type": "TextBlock",
+                  "text": "Commit: ${{ github.event.head_commit.message }}",
+                  "wrap": true
+                },
+                {
+                  "type": "TextBlock",
+                  "text": "URL: https://github.com/${{ github.repository }}/commit/${{ github.sha }}",
+                  "wrap": true
+                }
+              ]
+            }' \
+            "${{ secrets.TEAMS_WEBHOOK_STAGING }}"
 
       - name: Notify Teams (Staging Failure)
         if: failure()
         run: |
-          curl -H "Content-Type: application/json" \
-          -d "{
-            \"text\": \"STAGING BACKEND • Deployment Failed\n\nRepository: ${{ github.repository }}\nBranch: develop\nTriggered by: ${{ github.actor }}\n\nCommit:\n${{ github.event.head_commit.message }}\n\nhttps://github.com/${{ github.repository }}/commit/${{ github.sha }}\n\nCheck GitHub Actions logs.\"
-          }" \
-          ${{ secrets.TEAMS_WEBHOOK_STAGING }}
+          curl -i -X POST \
+            -H "Content-Type: application/json" \
+            -d '{
+              "type": "AdaptiveCard",
+              "version": "1.4",
+              "body": [
+                {
+                  "type": "TextBlock",
+                  "text": "STAGING BACKEND • Deployment Failed",
+                  "weight": "Bolder",
+                  "size": "Large"
+                },
+                {
+                  "type": "TextBlock",
+                  "text": "Repository: ${{ github.repository }}",
+                  "wrap": true
+                },
+                {
+                  "type": "TextBlock",
+                  "text": "Branch: develop",
+                  "wrap": true
+                },
+                {
+                  "type": "TextBlock",
+                  "text": "Triggered by: ${{ github.actor }}",
+                  "wrap": true
+                },
+                {
+                  "type": "TextBlock",
+                  "text": "Commit: ${{ github.event.head_commit.message }}",
+                  "wrap": true
+                },
+                {
+                  "type": "TextBlock",
+                  "text": "Check GitHub Actions logs.",
+                  "wrap": true
+                },
+                {
+                  "type": "TextBlock",
+                  "text": "URL: https://github.com/${{ github.repository }}/commit/${{ github.sha }}",
+                  "wrap": true
+                }
+              ]
+            }' \
+            "${{ secrets.TEAMS_WEBHOOK_STAGING }}"
