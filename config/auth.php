@@ -1,5 +1,8 @@
 <?php
 
+use App\Models\StaffUser;
+use App\Models\User;
+
 return [
 
     /*
@@ -44,6 +47,14 @@ return [
             'driver' => 'sanctum',
             'provider' => 'users',
         ],
+        'staff' => [
+            'driver' => 'session',
+            'provider' => 'staff_users',
+        ],
+        'staff_sanctum' => [
+            'driver' => 'sanctum',
+            'provider' => 'staff_users',
+        ],
     ],
 
     /*
@@ -66,7 +77,11 @@ return [
     'providers' => [
         'users' => [
             'driver' => 'eloquent',
-            'model' => env('AUTH_MODEL', App\Models\User::class),
+            'model' => env('AUTH_MODEL', User::class),
+        ],
+        'staff_users' => [
+            'driver' => 'eloquent',
+            'model' => StaffUser::class,
         ],
 
         // 'users' => [

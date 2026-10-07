@@ -5,6 +5,8 @@ use App\Http\Controllers\AiPlaygroundController;
 use App\Http\Controllers\Api\V1\EnquiryAnswerController;
 use App\Http\Controllers\Api\V1\EnquiryController;
 use App\Http\Controllers\AuthController;
+use App\Http\Controllers\StaffAuthController;
+use App\Http\Controllers\StaffInvitationController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -15,6 +17,23 @@ use Illuminate\Support\Facades\Route;
 
 Route::post('/register', [AuthController::class, 'register']);
 Route::post('/login', [AuthController::class, 'login']);
+
+Route::prefix('staff/invitations')
+    ->middleware('throttle:staff-invitations')
+    ->group(function () {
+        Route::post('/validate', [StaffInvitationController::class, 'validateInvitation']);
+        Route::post('/accept', [StaffInvitationController::class, 'accept']);
+    });
+
+Route::post('/staff/auth/login', [StaffAuthController::class, 'login'])
+    ->middleware('throttle:staff-login');
+
+Route::prefix('staff/auth')
+    ->middleware(['auth:staff_sanctum', 'staff.active'])
+    ->group(function () {
+        Route::get('/me', [StaffAuthController::class, 'me']);
+        Route::post('/logout', [StaffAuthController::class, 'logout']);
+    });
 
 /*
 |--------------------------------------------------------------------------

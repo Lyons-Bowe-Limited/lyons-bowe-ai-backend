@@ -1,5 +1,9 @@
 <?php
 
+use App\Console\Commands\BootstrapStaffSuperAdmin;
+use App\Console\Commands\ResendStaffActivation;
+use App\Http\Middleware\EnsureStaffAccountActive;
+use App\Http\Middleware\RequireStaffPermission;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -13,8 +17,15 @@ return Application::configure(basePath: dirname(__DIR__))
         commands: __DIR__.'/../routes/console.php',
         health: '/up',
     )
+    ->withCommands([
+        BootstrapStaffSuperAdmin::class,
+        ResendStaffActivation::class,
+    ])
     ->withMiddleware(function (Middleware $middleware): void {
-        //
+        $middleware->alias([
+            'staff.active' => EnsureStaffAccountActive::class,
+            'staff.permission' => RequireStaffPermission::class,
+        ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         // Return JSON responses for API routes

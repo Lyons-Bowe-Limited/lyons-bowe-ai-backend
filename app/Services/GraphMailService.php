@@ -61,7 +61,7 @@ class GraphMailService
         ]);
 
         if ($response->failed()) {
-            throw new \Exception('Graph token failed: ' . $response->body());
+            throw new \Exception('Graph token failed: '.$response->body());
         }
 
         return $response->json('access_token');
@@ -72,22 +72,24 @@ class GraphMailService
         $token = $this->accessToken();
 
         $recipients = collect($to)->map(fn ($email) => [
-            "emailAddress" => ["address" => $email]
+            'emailAddress' => ['address' => $email],
         ])->toArray();
 
         $email = [
-            "message" => [
-                "subject" => $subject,
-                "body" => [
-                    "contentType" => "HTML",
-                    "content" => $body
+            'message' => [
+                'subject' => $subject,
+                'body' => [
+                    'contentType' => 'HTML',
+                    'content' => $body,
                 ],
-                "toRecipients" => $recipients
-            ]
+                'toRecipients' => $recipients,
+            ],
         ];
 
         $response = Http::withToken($token)
-            ->post('https://graph.microsoft.com/v1.0/users/' . config('services.graph.mailbox') . '/sendMail', $email);
+            ->post('https://graph.microsoft.com/v1.0/users/'.config('services.graph.mailbox').'/sendMail', $email);
+
+        $response->throw();
 
         \Log::info('GRAPH SEND RESPONSE', [
             'status' => $response->status(),
