@@ -39,6 +39,14 @@ class StaffAuthenticationTest extends TestCase
         $this->assertNotNull($staffUser->fresh()->last_login_at);
         $this->assertDatabaseCount('personal_access_tokens', 1);
         $this->assertArrayNotHasKey('password', $response->json('staff'));
+
+        // NEW: Verify successful staff login is recorded in the audit log.
+        $this->assertDatabaseHas('staff_audit_logs', [
+            'staff_user_id' => $staffUser->id,
+            'action' => 'staff.login',
+            'subject_type' => StaffUser::class,
+            'subject_id' => $staffUser->id,
+        ]);
     }
 
     public function test_incorrect_credentials_use_one_generic_response(): void
@@ -58,6 +66,11 @@ class StaffAuthenticationTest extends TestCase
             'email' => 'unknown@example.com',
             'password' => 'IncorrectPassword!42',
         ])->assertUnprocessable()->assertExactJson($expected);
+
+        // NEW: Failed login attempts must not be recorded as successful logins.
+        $this->assertDatabaseMissing('staff_audit_logs', [
+            'action' => 'staff.login',
+        ]);
     }
 
     public function test_pending_account_cannot_log_in(): void
@@ -128,6 +141,15 @@ class StaffAuthenticationTest extends TestCase
             ->assertExactJson(['message' => 'Successfully logged out.']);
 
         $this->assertDatabaseCount('personal_access_tokens', 0);
+
+        // NEW: Verify staff logout is recorded in the audit log.
+        $this->assertDatabaseHas('staff_audit_logs', [
+            'staff_user_id' => $staffUser->id,
+            'action' => 'staff.logout',
+            'subject_type' => StaffUser::class,
+            'subject_id' => $staffUser->id,
+        ]);
+
         $this->app['auth']->forgetGuards();
         $this->withToken($plainTextToken)->getJson('/api/staff/auth/me')->assertUnauthorized();
     }

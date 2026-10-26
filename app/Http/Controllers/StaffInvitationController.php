@@ -11,9 +11,140 @@ use App\Support\StaffInvitationToken;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use App\Mail\StaffActivationMail;
+use App\Models\StaffRole;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Mail;
+use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
+use Throwable;
+use App\Services\StaffAuthorisationService;
 
 class StaffInvitationController extends Controller
+
 {
+    /**
+     * Invite a new staff member from the internal dashboard.
+     *
+     * Only authorised staff can access this endpoint.
+     */
+    public function store(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'first_name' => ['required', 'string', 'max:255'],
+            'last_name' => ['required', 'string', 'max:255'],
+            'email' => ['required', 'email:rfc', 'max:255'],
+            'role' => [
+                'required',
+                'string',
+                Rule::in([
+                    'super_admin',
+                    'enquiry_team_manager',
+                    'enquiry_team_member',
+                    'solicitor',
+                    'reporting_only',
+                ]),
+            ],
+        ]);
+
+        // SECURITY: Only staff with roles.manage may invite a Super Admin.
+        if (
+            $validated['role'] === 'super_admin'
+            && ! app(StaffAuthorisationService::class)->allows(
+                $request->user('staff_sanctum'),
+                'roles.manage'
+            )
+        ) {
+            return response()->json([
+                'message' => 'You are not authorised to assign the Super Admin role.',
+            ], 403);
+        }
+
+        // NORMALISATION: Match the existing staff email convention.
+        $email = mb_strtolower(trim($validated['email']));
+
+        // VALIDATION: Prevent duplicate staff accounts.
+        if (StaffUser::query()->whereRaw('LOWER(email) = ?', [$email])->exists()) {
+            throw ValidationException::withMessages([
+                'email' => 'A staff account with this email address already exists.',
+            ]);
+        }
+
+        $rawToken = StaffInvitationToken::generate();
+        $activationUrl = StaffInvitationToken::activationUrl($rawToken);
+
+        try {
+            $staffUser = DB::transaction(function () use (
+                $request,
+                $validated,
+                $email,
+                $rawToken,
+                $activationUrl
+            ): StaffUser {
+                $actor = $request->user('staff_sanctum');
+
+                $role = StaffRole::query()
+                    ->where('name', $validated['role'])
+                    ->firstOrFail();
+
+                // ACCOUNT: Create a pending staff account without a password.
+                $staffUser = StaffUser::query()->create([
+                    'first_name' => trim($validated['first_name']),
+                    'last_name' => trim($validated['last_name']),
+                    'email' => $email,
+                    'password' => null,
+                    'status' => StaffUser::STATUS_PENDING,
+                    'invited_by' => $actor->id,
+                ]);
+
+                // ROLE: Assign the selected role before activation.
+                $staffUser->roles()->attach($role);
+
+                // INVITATION: Store only the hash, never the raw token.
+                $invitation = StaffInvitation::query()->create([
+                    'staff_user_id' => $staffUser->id,
+                    'email' => $email,
+                    'token_hash' => StaffInvitationToken::hash($rawToken),
+                    'expires_at' => now()->addHours(24),
+                    'invited_by' => $actor->id,
+                ]);
+
+                // AUDIT: Record who invited the new staff member.
+                StaffAuditLog::query()->create([
+                    'staff_user_id' => $actor->id,
+                    'action' => 'staff.invitation_created',
+                    'subject_type' => StaffInvitation::class,
+                    'subject_id' => $invitation->id,
+                    'metadata' => [
+                        'staff_user_id' => $staffUser->id,
+                        'email' => $email,
+                        'role' => $role->name,
+                    ],
+                ]);
+
+                // EMAIL: Reuse the existing activation email.
+                // A synchronous transport exception rolls back the database changes.
+                Mail::to($email)->send(
+                    new StaffActivationMail($staffUser, $activationUrl)
+                );
+
+                return $staffUser;
+            }, 3);
+        } catch (Throwable $exception) {
+            report($exception);
+
+            return response()->json([
+                'message' => 'The staff invitation could not be sent. Please try again.',
+            ], 500);
+        }
+
+        return response()->json([
+            'message' => 'Staff invitation sent successfully.',
+            'staff' => new \App\Http\Resources\StaffUserResource($staffUser->load('roles')),
+        ], 201);
+    }
+
+
     public function validateInvitation(ValidateStaffInvitationRequest $request): JsonResponse
     {
         $invitation = $this->findInvitation($request->validated('token'));

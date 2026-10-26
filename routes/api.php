@@ -8,6 +8,8 @@ use App\Http\Controllers\AuthController;
 use App\Http\Controllers\StaffAuthController;
 use App\Http\Controllers\StaffInvitationController;
 use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\StaffRoleController;
+use App\Http\Controllers\StaffManagementController;
 
 /*
 |--------------------------------------------------------------------------
@@ -68,6 +70,43 @@ Route::post(
 )
     ->middleware('auth:sanctum')
     ->name('verification.send');
+
+
+/*
+|--------------------------------------------------------------------------
+| Staff routes
+|--------------------------------------------------------------------------
+*/
+
+Route::prefix('staff')
+    ->middleware(['auth:staff_sanctum', 'staff.active'])
+    ->group(function () {
+
+        Route::get('/roles', [StaffRoleController::class, 'index'])
+            ->middleware('staff.permission:roles.manage');
+
+        Route::put('/users/{staffUser}/role', [StaffRoleController::class, 'update'])
+            ->middleware('staff.permission:roles.manage');
+
+        // Staff management — listing and viewing staff accounts.
+        Route::get('/users', [StaffManagementController::class, 'index'])
+            ->middleware('staff.permission:team.view');
+
+        Route::get('/users/{staffUser}', [StaffManagementController::class, 'show'])
+            ->middleware('staff.permission:team.view');
+
+        // Only staff with team.manage can deactivate accounts.
+        Route::patch('/users/{staffUser}/deactivate', [StaffManagementController::class, 'deactivate'])
+        ->middleware('staff.permission:team.manage');
+
+        // Super Admin permission required to reactivate staff accounts.
+        Route::patch('/users/{staffUser}/reactivate', [StaffManagementController::class, 'reactivate'])
+            ->middleware('staff.permission:team.manage');
+
+        // Only staff with team.manage permission can invite staff members.
+        Route::post('/invitations', [StaffInvitationController::class, 'store'])
+            ->middleware('staff.permission:team.manage');
+        });
 
 /*
 |--------------------------------------------------------------------------
@@ -172,4 +211,5 @@ Route::middleware('auth:sanctum')->group(function () {
             'message' => 'Authenticated successfully',
         ]);
     });
+
 });

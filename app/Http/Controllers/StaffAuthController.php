@@ -8,6 +8,7 @@ use App\Models\StaffUser;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
+use App\Models\StaffAuditLog;
 
 class StaffAuthController extends Controller
 {
@@ -28,6 +29,17 @@ class StaffAuthController extends Controller
         $staffUser->forceFill(['last_login_at' => now()])->save();
         $token = $staffUser->createToken('staff-dashboard')->plainTextToken;
 
+        StaffAuditLog::create([
+            'staff_user_id' => $staffUser->id,
+            'action' => 'staff.login',
+            'subject_type' => StaffUser::class,
+            'subject_id' => $staffUser->id,
+            'metadata' => [
+                'ip_address' => $request->ip(),
+                'user_agent' => $request->userAgent(),
+            ],
+        ]);
+
         return response()->json([
             'staff' => (new StaffUserResource($staffUser))->resolve($request),
             'access_token' => $token,
@@ -44,9 +56,24 @@ class StaffAuthController extends Controller
 
     public function logout(Request $request): JsonResponse
     {
-        $request->user()->currentAccessToken()?->delete();
+        $staffUser = $request->user('staff_sanctum');
 
-        return response()->json(['message' => 'Successfully logged out.']);
+        StaffAuditLog::create([
+            'staff_user_id' => $staffUser->id,
+            'action' => 'staff.logout',
+            'subject_type' => StaffUser::class,
+            'subject_id' => $staffUser->id,
+            'metadata' => [
+                'ip_address' => $request->ip(),
+                'user_agent' => $request->userAgent(),
+            ],
+        ]);
+
+        $staffUser->currentAccessToken()?->delete();
+
+        return response()->json([
+            'message' => 'Successfully logged out.',
+        ]);
     }
 
     private function canAuthenticate(?StaffUser $staffUser, string $password): bool
