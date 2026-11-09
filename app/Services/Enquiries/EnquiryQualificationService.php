@@ -59,6 +59,15 @@ class EnquiryQualificationService
         $hasIntent = $intentSignal && ($willCompleted || $explicitRequest || $intentConfident);
         $qualified = $hasIntent && $contactComplete && $classificationValid && $classificationConfident;
 
+        // Capture a lead while Victoria is still gathering facts. This gate is
+        // independent of consultation recommendation, matter type and stage.
+        $account = $conversation->user()->first();
+        $accountContact = filled($account?->name) && filter_var($account?->email, FILTER_VALIDATE_EMAIL) !== false;
+        $latestUserMessage = $conversation->messages()->where('role', 'user')->latest('created_at')->latest('id')->value('content');
+        $helpRequested = ($recognisedIntent && $intentConfident)
+            || app(LegalHelpIntentDetector::class)->detect($latestUserMessage ?? '');
+        $draftEligible = $area !== PracticeArea::Unclassified && $classificationConfident && $accountContact && $helpRequested;
+
         $reason = match (true) {
             ! $classificationValid => 'classification_requires_review',
             ! $classificationConfident, $intentSignal && ! $hasIntent => 'qualification_confidence_too_low',
@@ -68,15 +77,23 @@ class EnquiryQualificationService
             $willCompleted => 'will_workflow_completed',
             default => $consultation['reason'] ?? 'legal_intent_confirmed',
         };
+        $stillGathering = $draftEligible || ($enquiry?->status === 'draft' && $area !== PracticeArea::Unclassified && $classificationConfident && $accountContact);
+        if ($stillGathering && ! $qualified) {
+            $reason = 'information_gathering';
+        }
         if ($source === 'staff' && $enquiry->requires_review) {
             $qualified = false;
             $reason = $enquiry->handoff_reason ?? 'staff_review_required';
         }
-        if ((! $classificationValid || ! $classificationConfident) && $source !== 'staff') {
-            $area = PracticeArea::Unclassified;
-            $matter = null;
+        if ($source !== 'staff') {
+            if (! $classificationConfident) {
+                $area = PracticeArea::Unclassified;
+            }
+            if (! $classificationValid || ! $classificationConfident) {
+                $matter = null;
+            }
         }
-        $shouldPersist = $willCompleted || ($hasIntent && $contactComplete) || ($enquiry !== null && $intentSignal);
+        $shouldPersist = $draftEligible || $willCompleted || ($hasIntent && $contactComplete) || ($enquiry !== null && ($intentSignal || $enquiry->status === 'draft'));
 
         return new QualificationResult($shouldPersist, $qualified, $area, $matter, $confidence, $source, ! $qualified, $reason, contactDetails: $contacts);
     }

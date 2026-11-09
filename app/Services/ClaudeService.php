@@ -150,6 +150,13 @@ class ClaudeService
             - booking_presented
             - completed
 
+            Legal-help intent:
+            - Use seek_legal_help when the client clearly requests personal legal help or assistance, even while facts/matter type are incomplete.
+            - Use instruct_solicitor when they clearly ask to instruct a solicitor.
+            - General informational questions use general_information; do not turn them into instructions.
+            - A consultation recommendation, booking readiness or complete questionnaire is not required to identify legal-help intent.
+            - Leave matter_type null when the specific matter remains unclear; retain a supported practice_area if confidently identified.
+
             Urgency extraction:
             - Current reference time: {$referenceTime}. Resolve explicitly stated relative dates against this time.
             - Return structured urgency signals separately from summary. Never infer urgency from summary text.

@@ -152,8 +152,11 @@ class EnquiryQualificationTest extends TestCase
         foreach (['something_unknown', 'divorce'] as $matter) {
             $conversation = $this->conversation();
             $result = $this->qualify($conversation, $this->memory($conversation, ['matter_type' => $matter]));
-            $this->assertSame(PracticeArea::Unclassified, $result->practiceArea);
+            $this->assertSame(PracticeArea::Property, $result->practiceArea);
+            $this->assertNull($result->matterType);
             $this->assertTrue($result->requiresReview);
+            $this->assertSame('draft', $result->enquiry->status);
+            $this->assertSame('information_gathering', $result->reason);
         }
     }
 
@@ -377,7 +380,7 @@ class EnquiryQualificationTest extends TestCase
     public function test_unrecognised_classification_has_classification_review_reason(): void
     {
         $conversation = $this->conversation();
-        $result = $this->qualify($conversation, $this->memory($conversation, ['matter_type' => 'unknown']));
+        $result = $this->qualify($conversation, $this->memory($conversation, ['practice_area' => 'unknown', 'matter_type' => 'unknown']));
         $this->assertSame('classification_requires_review', $result->reason);
         $this->assertDatabaseHas('enquiry_events', ['event_type' => 'classification_requires_review']);
     }

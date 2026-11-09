@@ -33,7 +33,7 @@ class UrgencyDetectionService
         if (preg_match('/\b(?:not urgent|no longer urgent|isn.t urgent|is not urgent|if this is urgent)\b/u', $message)) {
             return null;
         }
-        if (preg_match('/(?:^|[.!?;\n]\s*)(?:(?:please[, ]+)?(?:this|it|my (?:matter|case|situation)|the (?:matter|case)) is (?:very |really )?urgent|i need urgent (?:legal )?help)\b/u', $message)) {
+        if (preg_match('/(?:^|[.!?;\n]\s*)(?:(?:please[, ]+)?(?:this|it|my (?:matter|case|situation)|the (?:matter|case)) is (?:(?:very |really )?urgent|(?:a )?matter of urgency(?: now)?)|i need urgent (?:legal )?help)\b/u', $message)) {
             return ['type' => 'explicit_urgent', 'confidence' => 1.0, 'immediate' => true, 'deadline_at' => null];
         }
 
