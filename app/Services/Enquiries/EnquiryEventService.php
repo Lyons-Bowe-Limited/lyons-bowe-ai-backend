@@ -5,6 +5,7 @@ namespace App\Services\Enquiries;
 use App\Models\Enquiry;
 use App\Models\EnquiryEvent;
 use App\Models\EnquiryWorkflow;
+use App\Models\StaffUser;
 
 class EnquiryEventService
 {
@@ -19,6 +20,23 @@ class EnquiryEventService
     public const CLASSIFICATION_REQUIRES_REVIEW = 'classification_requires_review';
 
     public const ENQUIRY_READY_FOR_ASSIGNMENT = 'enquiry_ready_for_assignment';
+
+    public const ENQUIRY_REASSIGNED = 'enquiry_reassigned';
+
+    public const ENQUIRY_UNASSIGNED = 'enquiry_unassigned';
+
+    public const CLASSIFICATION_CORRECTED = 'enquiry_classification_corrected';
+
+    public function staffChange(Enquiry $enquiry, StaffUser $actor, string $type, array $before, array $after): EnquiryEvent
+    {
+        return EnquiryEvent::create([
+            'enquiry_id' => $enquiry->id,
+            'workflow_id' => $enquiry->workflow?->id,
+            'performed_by_staff_id' => $actor->id,
+            'event_type' => $type,
+            'metadata' => ['actor_staff_id' => $actor->id, 'before' => $before, 'after' => $after],
+        ]);
+    }
 
     public function operational(Enquiry $enquiry, string $eventType): EnquiryEvent
     {

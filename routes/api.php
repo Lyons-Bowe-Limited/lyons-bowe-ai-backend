@@ -4,12 +4,13 @@ use App\Http\Controllers\AiConversationController;
 use App\Http\Controllers\AiPlaygroundController;
 use App\Http\Controllers\Api\V1\EnquiryAnswerController;
 use App\Http\Controllers\Api\V1\EnquiryController;
+use App\Http\Controllers\Api\V1\Internal\EnquiryController as InternalEnquiryController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\StaffAuthController;
 use App\Http\Controllers\StaffInvitationController;
-use Illuminate\Support\Facades\Route;
-use App\Http\Controllers\StaffRoleController;
 use App\Http\Controllers\StaffManagementController;
+use App\Http\Controllers\StaffRoleController;
+use Illuminate\Support\Facades\Route;
 
 /*
 |--------------------------------------------------------------------------
@@ -71,7 +72,6 @@ Route::post(
     ->middleware('auth:sanctum')
     ->name('verification.send');
 
-
 /*
 |--------------------------------------------------------------------------
 | Staff routes
@@ -81,6 +81,16 @@ Route::post(
 Route::prefix('staff')
     ->middleware(['auth:staff_sanctum', 'staff.active'])
     ->group(function () {
+
+        Route::prefix('enquiries')->middleware('staff.permission:enquiries.view')->group(function () {
+            Route::get('/', [InternalEnquiryController::class, 'index']);
+            Route::get('/counts', [InternalEnquiryController::class, 'counts']);
+            Route::get('/{enquiry}', [InternalEnquiryController::class, 'show'])->whereUuid('enquiry');
+            Route::patch('/{enquiry}/assignment', [InternalEnquiryController::class, 'assign'])
+                ->whereUuid('enquiry')->middleware('staff.permission:enquiries.assign');
+            Route::patch('/{enquiry}/classification', [InternalEnquiryController::class, 'correctClassification'])
+                ->whereUuid('enquiry')->middleware('staff.permission:enquiries.classify');
+        });
 
         Route::get('/roles', [StaffRoleController::class, 'index'])
             ->middleware('staff.permission:roles.manage');
@@ -97,7 +107,7 @@ Route::prefix('staff')
 
         // Only staff with team.manage can deactivate accounts.
         Route::patch('/users/{staffUser}/deactivate', [StaffManagementController::class, 'deactivate'])
-        ->middleware('staff.permission:team.manage');
+            ->middleware('staff.permission:team.manage');
 
         // Super Admin permission required to reactivate staff accounts.
         Route::patch('/users/{staffUser}/reactivate', [StaffManagementController::class, 'reactivate'])
@@ -106,7 +116,7 @@ Route::prefix('staff')
         // Only staff with team.manage permission can invite staff members.
         Route::post('/invitations', [StaffInvitationController::class, 'store'])
             ->middleware('staff.permission:team.manage');
-        });
+    });
 
 /*
 |--------------------------------------------------------------------------

@@ -67,6 +67,10 @@ class EnquiryQualificationService
             $willCompleted => 'will_workflow_completed',
             default => $consultation['reason'] ?? 'legal_intent_confirmed',
         };
+        if ($source === 'staff' && $enquiry->requires_review) {
+            $qualified = false;
+            $reason = $enquiry->handoff_reason ?? 'staff_review_required';
+        }
         if ((! $classificationValid || ! $classificationConfident) && $source !== 'staff') {
             $area = PracticeArea::Unclassified;
             $matter = null;

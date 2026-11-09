@@ -16,6 +16,7 @@ class EnquiryEvent extends Model
         'enquiry_id',
         'workflow_id',
         'performed_by',
+        'performed_by_staff_id',
         'event_type',
         'from_status',
         'to_status',
@@ -43,6 +44,11 @@ class EnquiryEvent extends Model
             EnquiryWorkflow::class,
             'workflow_id'
         );
+    }
+
+    public function performedByStaff(): BelongsTo
+    {
+        return $this->belongsTo(StaffUser::class, 'performed_by_staff_id');
     }
 
     public function performedBy(): BelongsTo
