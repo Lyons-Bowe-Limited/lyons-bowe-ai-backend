@@ -3,6 +3,7 @@
 namespace App\Services\Enquiries;
 
 use App\Data\Enquiries\StepResult;
+use App\Enums\EnquiryPriority;
 use App\Enums\PracticeArea;
 use App\Models\Enquiry;
 use App\Models\EnquiryAnswer;
@@ -21,6 +22,7 @@ class EnquiryWorkflowService
         private readonly EnquiryCreationService $creation,
         private readonly EnquiryQualificationService $qualification,
         private readonly EnquiryEventService $events,
+        private readonly EnquiryPriorityService $priorities,
     ) {}
 
     /**
@@ -33,6 +35,9 @@ class EnquiryWorkflowService
         ?string $workflowKey = null,
         string $priority = 'normal',
     ): StepResult {
+        if (! EnquiryPriority::tryFrom($priority)) {
+            throw ValidationException::withMessages(['priority' => 'Priority must be normal, high or urgent.']);
+        }
         $workflowKey ??= $this->resolveWorkflowKey(
             $practiceArea
         );
@@ -101,8 +106,8 @@ class EnquiryWorkflowService
                     $workflowKey
                 ),
                 'state' => [
-                'visited_steps' => [],
-                'completed_steps' => [],
+                    'visited_steps' => [],
+                    'completed_steps' => [],
                 ],
                 'started_at' => now(),
                 'last_activity_at' => now(),
@@ -208,6 +213,12 @@ class EnquiryWorkflowService
                 revision: $revision,
                 performedBy: $performedBy,
             );
+
+            if ($validatedAnswer === true && in_array($step['question_key'] ?? $stepKey, config('enquiry-priority.urgent_will_keys'), true)) {
+                $this->priorities->urgentWill($enquiry);
+            } else {
+                $this->priorities->fromWorkflowAnswers($enquiry);
+            }
 
             $nextStepKey = $this->branchResolver->resolve(
                 workflowKey: $workflow->workflow_key,

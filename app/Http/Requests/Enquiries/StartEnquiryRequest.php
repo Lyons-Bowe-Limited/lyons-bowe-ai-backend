@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\Enquiries;
 
+use App\Enums\EnquiryPriority;
 use App\Enums\PracticeArea;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -37,7 +38,7 @@ class StartEnquiryRequest extends FormRequest
             'priority' => [
                 'nullable',
                 'string',
-                'in:low,normal,high,urgent',
+                Rule::enum(EnquiryPriority::class),
             ],
         ];
     }

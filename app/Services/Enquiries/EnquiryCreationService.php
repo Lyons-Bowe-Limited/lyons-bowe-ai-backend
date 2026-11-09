@@ -2,10 +2,12 @@
 
 namespace App\Services\Enquiries;
 
+use App\Enums\EnquiryPriority;
 use App\Enums\PracticeArea;
 use App\Models\AiConversation;
 use App\Models\Enquiry;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 class EnquiryCreationService
 {
@@ -14,6 +16,9 @@ class EnquiryCreationService
     /** Call inside a wider transaction when further updates must share the lock. */
     public function getOrCreate(?int $conversationId, array $attributes): Enquiry
     {
+        if (isset($attributes['priority']) && ! EnquiryPriority::tryFrom($attributes['priority'])) {
+            throw ValidationException::withMessages(['priority' => 'Priority must be normal, high or urgent.']);
+        }
         unset($attributes['conversation_id']);
 
         return DB::transaction(function () use ($conversationId, $attributes) {

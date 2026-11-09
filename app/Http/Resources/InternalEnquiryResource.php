@@ -19,6 +19,7 @@ class InternalEnquiryResource extends EnquiryListItemResource
 
         return [
             ...parent::toArray($request),
+            'priority_set_by_staff_id' => $this->priority_set_by_staff_id,
             'user_id' => $this->user_id, 'conversation_id' => $this->conversation_id,
             'assigned_to' => $this->assigned_to, // Legacy client-user ID; never internal assignment.
             'recommended_service' => $this->recommended_service, 'completion_percentage' => $this->completion_percentage,

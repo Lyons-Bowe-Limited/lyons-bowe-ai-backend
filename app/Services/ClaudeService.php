@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use Carbon\CarbonImmutable;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
@@ -121,6 +122,7 @@ class ClaudeService
         array $currentMemory,
         array $messages
     ): array {
+        $referenceTime = CarbonImmutable::now(config('enquiry-priority.timezone'))->toIso8601String();
         $systemPrompt = <<<PROMPT
             You maintain structured conversation context for a UK law firm's AI assistant.
 
@@ -148,6 +150,22 @@ class ClaudeService
             - booking_presented
             - completed
 
+            Urgency extraction:
+            - Current reference time: {$referenceTime}. Resolve explicitly stated relative dates against this time.
+            - Return structured urgency signals separately from summary. Never infer urgency from summary text.
+            - Types: explicit_urgent, immediate_safety, court_deadline, hearing_date, completion_deadline,
+              medical_deadline (imminent medical issue relevant to a Will), other_deadline, time_sensitive_circumstance.
+            - explicit_urgent requires a client's direct assertion/request that their matter is urgent.
+            - immediate_safety requires an explicitly stated immediate safety/safeguarding concern.
+            - Emotional language (worried, stressed, upset) alone is not legal urgency.
+            - General/hypothetical questions, negated urgency and assistant suggestions are not client urgency signals.
+            - deadline_at is an ISO 8601 timestamp with offset or YYYY-MM-DD, only if stated/anchored by the client.
+            - Do not invent dates, years, immediacy or legal deadlines. Unknown deadline_at/immediate must be null.
+            - immediate is true/false only when immediacy/non-immediacy is clearly stated.
+            - Each signal has exactly: type, confidence, immediate, deadline_at.
+            - confidence is a number from 0 to 1 for each signal. Return an empty signals list when none are reliable.
+            - Preserve established absolute deadlines unless explicitly corrected. Do not store quotes or raw messages in signals.
+
             Return this exact structure:
 
             {
@@ -158,7 +176,8 @@ class ClaudeService
             "summary": null,
             "entities": {},
             "practice_area_confidence": 0,
-            "intent_confidence": 0
+            "intent_confidence": 0,
+            "urgency": {"signals": []}
             }
             PROMPT;
 
@@ -169,7 +188,7 @@ class ClaudeService
 
         $response = $this->request([
             'model' => config('services.anthropic.model'),
-            'max_tokens' => 800,
+            'max_tokens' => 1200,
             'system' => $systemPrompt,
             'messages' => [
                 [

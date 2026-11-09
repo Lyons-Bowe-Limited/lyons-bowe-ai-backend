@@ -22,6 +22,11 @@ class Enquiry extends Model
         'workflow_key',
         'status',
         'priority',
+        'priority_source',
+        'priority_reason',
+        'priority_confidence',
+        'priority_set_at',
+        'priority_set_by_staff_id',
         'client_name',
         'client_email',
         'client_phone',
@@ -47,6 +52,9 @@ class Enquiry extends Model
     protected function casts(): array
     {
         return [
+            'priority_set_at' => 'datetime',
+            'priority_confidence' => 'float',
+            'priority_set_by_staff_id' => 'integer',
             'qualified_at' => 'datetime',
             'classification_confidence' => 'float',
             'requires_review' => 'boolean',
@@ -80,6 +88,11 @@ class Enquiry extends Model
             User::class,
             'assigned_to'
         );
+    }
+
+    public function prioritySetByStaff(): BelongsTo
+    {
+        return $this->belongsTo(StaffUser::class, 'priority_set_by_staff_id');
     }
 
     public function assignedStaff(): BelongsTo

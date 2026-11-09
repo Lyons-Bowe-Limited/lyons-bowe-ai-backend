@@ -11,6 +11,7 @@ class EnquiryActivityResource extends JsonResource
     public function toArray(Request $request): array
     {
         $fields = match ($this->event_type) {
+            EnquiryEventService::PRIORITY_RAISED, EnquiryEventService::PRIORITY_CHANGED_BY_STAFF => ['priority', 'priority_source', 'priority_reason', 'priority_confidence'],
             EnquiryEventService::ENQUIRY_ASSIGNED, EnquiryEventService::ENQUIRY_REASSIGNED, EnquiryEventService::ENQUIRY_UNASSIGNED => ['assigned_staff_id'],
             EnquiryEventService::CLASSIFICATION_CORRECTED => ['practice_area', 'matter_type', 'classification_source', 'classification_confidence', 'requires_review', 'handoff_reason'],
             default => [],

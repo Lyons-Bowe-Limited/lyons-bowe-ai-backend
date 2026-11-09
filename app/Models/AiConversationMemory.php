@@ -16,6 +16,7 @@ class AiConversationMemory extends Model
         'intent',
         'summary',
         'entities',
+        'urgency',
         'practice_area_confidence',
         'intent_confidence',
         'consultation_recommended',
@@ -25,6 +26,7 @@ class AiConversationMemory extends Model
 
     protected $casts = [
         'entities' => 'array',
+        'urgency' => 'array',
         'metadata' => 'array',
         'practice_area_confidence' => 'float',
         'intent_confidence' => 'float',

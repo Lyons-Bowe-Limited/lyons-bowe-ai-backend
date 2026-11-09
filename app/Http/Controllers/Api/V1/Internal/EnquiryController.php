@@ -2,14 +2,17 @@
 
 namespace App\Http\Controllers\Api\V1\Internal;
 
+use App\Enums\EnquiryPriority;
 use App\Enums\EnquiryStatus;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Internal\AssignEnquiryRequest;
+use App\Http\Requests\Internal\ChangeEnquiryPriorityRequest;
 use App\Http\Requests\Internal\CorrectEnquiryClassificationRequest;
 use App\Http\Requests\Internal\ListEnquiriesRequest;
 use App\Http\Resources\Internal\EnquiryListItemResource;
 use App\Http\Resources\InternalEnquiryResource;
 use App\Models\Enquiry;
+use App\Services\Enquiries\EnquiryPriorityService;
 use App\Services\Enquiries\InternalEnquiryService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
@@ -74,6 +77,11 @@ class EnquiryController extends Controller
     public function correctClassification(CorrectEnquiryClassificationRequest $request, Enquiry $enquiry, InternalEnquiryService $service): InternalEnquiryResource
     {
         return $this->resource($service->correctClassification($enquiry, $request->validated(), $request->user()));
+    }
+
+    public function changePriority(ChangeEnquiryPriorityRequest $request, Enquiry $enquiry, EnquiryPriorityService $service): InternalEnquiryResource
+    {
+        return $this->resource($service->override($enquiry, EnquiryPriority::from($request->validated('priority')), $request->validated('reason'), $request->user()));
     }
 
     private function resource(Enquiry $enquiry): InternalEnquiryResource

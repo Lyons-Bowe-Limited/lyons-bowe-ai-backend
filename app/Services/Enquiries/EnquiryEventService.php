@@ -9,6 +9,10 @@ use App\Models\StaffUser;
 
 class EnquiryEventService
 {
+    public const PRIORITY_RAISED = 'priority_raised';
+
+    public const PRIORITY_CHANGED_BY_STAFF = 'priority_changed_by_staff';
+
     public const ENQUIRY_CLASSIFIED = 'enquiry_classified';
 
     public const ENQUIRY_QUALIFICATION_REQUIRES_REVIEW = 'enquiry_qualification_requires_review';

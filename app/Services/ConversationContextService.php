@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\AiConversation;
 use App\Models\AiConversationMemory;
+use App\Services\Enquiries\UrgencyDetectionService;
 use Illuminate\Support\Str;
 
 class ConversationContextService
@@ -60,6 +61,7 @@ class ConversationContextService
             'intent' => $memory->intent,
             'summary' => $memory->summary,
             'entities' => $memory->entities ?? [],
+            'urgency' => $memory->urgency ?? ['signals' => []],
             'practice_area_confidence' => $memory->practice_area_confidence,
             'intent_confidence' => $memory->intent_confidence,
         ];
@@ -70,7 +72,9 @@ class ConversationContextService
         );
 
         if ($updatedContext === []) {
-            return $memory;
+            $this->persistUrgency($memory, $memory->urgency, $messages);
+
+            return $memory->fresh();
         }
 
         $practiceArea = $this->validPracticeArea(
@@ -118,7 +122,20 @@ class ConversationContextService
             ),
         ]);
 
+        $this->persistUrgency($memory, $updatedContext['urgency'] ?? $memory->urgency, $messages);
+
         return $memory->fresh();
+    }
+
+    private function persistUrgency(AiConversationMemory $memory, mixed $structured, array $messages): void
+    {
+        $detector = app(UrgencyDetectionService::class);
+        $urgency = $detector->normalise($structured);
+        $latest = collect($messages)->last(fn ($message) => $message['role'] === 'user');
+        if ($explicit = $detector->explicitRequest($latest['content'] ?? '')) {
+            array_unshift($urgency['signals'], $explicit);
+        }
+        $memory->update(['urgency' => $detector->normalise($urgency)]);
     }
 
     public function recentHistory(
@@ -135,6 +152,7 @@ class ConversationContextService
 
         return $query
             ->latest('created_at')
+            ->latest('id')
             ->limit($limit)
             ->get()
             ->reverse()

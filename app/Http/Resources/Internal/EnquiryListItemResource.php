@@ -16,6 +16,8 @@ class EnquiryListItemResource extends JsonResource
             'practice_area' => $this->practice_area, 'matter_type' => $this->matter_type,
             'source' => $this->workflow_key === 'victoria_conversation' ? 'victoria' : 'workflow', 'workflow_key' => $this->workflow_key,
             'office' => $this->office, 'status' => $this->status, 'priority' => $this->priority,
+            'priority_source' => $this->priority_source, 'priority_reason' => $this->priority_reason,
+            'priority_confidence' => $this->priority_confidence, 'priority_set_at' => $this->priority_set_at,
             'assigned_staff_id' => $this->assigned_staff_id,
             'assigned_staff' => new AssignedStaffResource($this->whenLoaded('assignedStaff')),
             'requires_review' => $this->requires_review, 'classification_confidence' => $this->classification_confidence,

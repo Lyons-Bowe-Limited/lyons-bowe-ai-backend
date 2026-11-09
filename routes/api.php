@@ -88,6 +88,8 @@ Route::prefix('staff')
             Route::get('/{enquiry}', [InternalEnquiryController::class, 'show'])->whereUuid('enquiry');
             Route::patch('/{enquiry}/assignment', [InternalEnquiryController::class, 'assign'])
                 ->whereUuid('enquiry')->middleware('staff.permission:enquiries.assign');
+            Route::patch('/{enquiry}/priority', [InternalEnquiryController::class, 'changePriority'])
+                ->whereUuid('enquiry')->middleware('staff.permission:enquiries.prioritise');
             Route::patch('/{enquiry}/classification', [InternalEnquiryController::class, 'correctClassification'])
                 ->whereUuid('enquiry')->middleware('staff.permission:enquiries.classify');
         });

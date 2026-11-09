@@ -14,6 +14,7 @@ class EnquiryQualificationService
     public function __construct(
         private readonly EnquiryCreationService $creation,
         private readonly EnquiryEventService $events,
+        private readonly EnquiryPriorityService $priorities,
     ) {}
 
     public function decide(AiConversation $conversation, ?AiConversationMemory $memory, array $consultation = [], bool $willCompleted = false, ?Enquiry $enquiry = null): QualificationResult
@@ -88,6 +89,10 @@ class EnquiryQualificationService
             AiConversation::query()->whereKey($conversation->id)->lockForUpdate()->firstOrFail();
             $memory = $conversation->memory()->whereKey($memory->id)->lockForUpdate()->firstOrFail();
             $enquiry = $conversation->enquiry()->lockForUpdate()->first();
+            if ($enquiry) {
+                $enquiry = $this->priorities->fromMemory($enquiry, $memory);
+                $enquiry = $this->priorities->fromWorkflowAnswers($enquiry);
+            }
             $workflow = $enquiry?->workflow;
             $willCompleted = $workflow?->status === 'completed' && $workflow->workflow_key === 'will_enquiry_v1';
             $decision = $this->decide($conversation, $memory, $consultation, $willCompleted, $enquiry);
@@ -129,6 +134,7 @@ class EnquiryQualificationService
             $decision = new QualificationResult(true, $qualified, $area, $matter, $staff ? (float) ($enquiry->classification_confidence ?? 1) : 1, $staff ? 'staff' : 'workflow', ! $qualified, $reason, contactDetails: $contacts);
         }
         $this->apply($enquiry, $conversation, $memory, $decision);
+        $this->priorities->fromWorkflowAnswers($enquiry);
     }
 
     private function apply(Enquiry $enquiry, ?AiConversation $conversation, ?AiConversationMemory $memory, QualificationResult $decision): QualificationResult
@@ -162,6 +168,9 @@ class EnquiryQualificationService
             }
         }
         $enquiry->update($attributes);
+        if ($memory) {
+            $this->priorities->fromMemory($enquiry, $memory);
+        }
 
         if ($previousArea === PracticeArea::Unclassified->value && $enquiry->practice_area !== PracticeArea::Unclassified->value) {
             $this->events->operational($enquiry, EnquiryEventService::ENQUIRY_CLASSIFIED);
