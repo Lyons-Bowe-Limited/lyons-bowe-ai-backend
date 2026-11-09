@@ -28,7 +28,14 @@ class Enquiry extends Model
         'office',
         'recommended_service',
         'completion_percentage',
-        'assigned_to',
+        'assigned_to', // Legacy client-user assignment; internal assignment uses assigned_staff_id.
+        'assigned_staff_id',
+        'matter_type',
+        'qualified_at',
+        'classification_confidence',
+        'classification_source',
+        'requires_review',
+        'handoff_reason',
         'summary',
         'metadata',
         'started_at',
@@ -40,6 +47,9 @@ class Enquiry extends Model
     protected function casts(): array
     {
         return [
+            'qualified_at' => 'datetime',
+            'classification_confidence' => 'float',
+            'requires_review' => 'boolean',
             'summary' => 'array',
             'metadata' => 'array',
             'completion_percentage' => 'integer',
@@ -63,12 +73,18 @@ class Enquiry extends Model
         );
     }
 
+    /** Legacy client-user relationship. Use assignedStaff for internal assignment. */
     public function assignedUser(): BelongsTo
     {
         return $this->belongsTo(
             User::class,
             'assigned_to'
         );
+    }
+
+    public function assignedStaff(): BelongsTo
+    {
+        return $this->belongsTo(StaffUser::class, 'assigned_staff_id');
     }
 
     public function workflow(): HasOne

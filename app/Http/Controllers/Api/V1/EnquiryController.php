@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Enquiries\StartEnquiryRequest;
+use App\Http\Resources\EnquiryResource;
 use App\Models\Enquiry;
 use App\Services\Enquiries\EnquiryWorkflowService;
 use Illuminate\Http\JsonResponse;
@@ -13,8 +14,7 @@ class EnquiryController extends Controller
 {
     public function __construct(
         private readonly EnquiryWorkflowService $workflowService,
-    ) {
-    }
+    ) {}
 
     /**
      * Start a new enquiry workflow.
@@ -27,12 +27,9 @@ class EnquiryController extends Controller
         $result = $this->workflowService->start(
             practiceArea: $validated['practice_area'],
             user: $request->user(),
-            conversationId:
-                $validated['conversation_id'] ?? null,
-            workflowKey:
-                $validated['workflow_key'] ?? null,
-            priority:
-                $validated['priority'] ?? 'normal',
+            conversationId: $validated['conversation_id'] ?? null,
+            workflowKey: $validated['workflow_key'] ?? null,
+            priority: $validated['priority'] ?? 'normal',
         );
 
         return response()->json([
@@ -52,6 +49,20 @@ class EnquiryController extends Controller
             request: $request,
             enquiry: $enquiry,
         );
+
+        if (! $enquiry->workflow) {
+            return response()->json([
+                'message' => 'Enquiry retrieved successfully.',
+                'data' => [
+                    'enquiry' => new EnquiryResource($enquiry),
+                    'workflow' => null,
+                    'current_step_key' => null,
+                    'current_step' => null,
+                    'completed' => $enquiry->status === 'completed',
+                    'progress' => $enquiry->completion_percentage,
+                ],
+            ]);
+        }
 
         $result = $this->workflowService->getCurrentState(
             $enquiry

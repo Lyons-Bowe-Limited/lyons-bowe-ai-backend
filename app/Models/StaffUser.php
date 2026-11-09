@@ -47,6 +47,11 @@ class StaffUser extends Authenticatable
         ];
     }
 
+    public function assignedEnquiries(): HasMany
+    {
+        return $this->hasMany(Enquiry::class, 'assigned_staff_id');
+    }
+
     public function roles(): BelongsToMany
     {
         return $this->belongsToMany(StaffRole::class, 'staff_role_user');

@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 
@@ -21,6 +22,16 @@ class AiConversation extends Model
         'metadata' => 'array',
         'is_starred' => 'boolean',
     ];
+
+    public function user(): BelongsTo
+    {
+        return $this->belongsTo(User::class);
+    }
+
+    public function enquiry(): HasOne
+    {
+        return $this->hasOne(Enquiry::class, 'conversation_id');
+    }
 
     public function messages(): HasMany
     {

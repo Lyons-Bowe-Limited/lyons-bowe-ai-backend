@@ -8,6 +8,30 @@ use App\Models\EnquiryWorkflow;
 
 class EnquiryEventService
 {
+    public const ENQUIRY_QUALIFIED = 'enquiry_qualified';
+
+    public const ENQUIRY_SUBMITTED = 'enquiry_submitted';
+
+    public const CLASSIFICATION_REQUIRES_REVIEW = 'classification_requires_review';
+
+    public const ENQUIRY_READY_FOR_ASSIGNMENT = 'enquiry_ready_for_assignment';
+
+    public function operational(Enquiry $enquiry, string $eventType): EnquiryEvent
+    {
+        return $this->record(
+            enquiry: $enquiry,
+            workflow: $enquiry->workflow,
+            eventType: $eventType,
+            performedBy: $enquiry->user_id,
+            metadata: [
+                'classification_source' => $enquiry->classification_source,
+                'practice_area' => $enquiry->practice_area,
+                'matter_type' => $enquiry->matter_type,
+                'handoff_reason' => $enquiry->handoff_reason,
+            ],
+        );
+    }
+
     public const WORKFLOW_STARTED = 'workflow_started';
 
     public const ANSWER_RECORDED = 'answer_recorded';
@@ -140,10 +164,8 @@ class EnquiryEventService
             toStatus: $workflow->status,
             metadata: [
                 'answered_steps' => $workflow->answered_steps,
-                'total_applicable_steps' =>
-                    $workflow->total_applicable_steps,
-                'completion_percentage' =>
-                    $enquiry->completion_percentage,
+                'total_applicable_steps' => $workflow->total_applicable_steps,
+                'completion_percentage' => $enquiry->completion_percentage,
                 ...$metadata,
             ],
         );
@@ -167,8 +189,8 @@ class EnquiryEventService
             performedBy: $performedBy,
             stepKey: $workflow?->current_step_key,
             metadata: [
-                'previously_assigned_to' => $previouslyAssignedTo,
-                'assigned_to' => $assignedTo,
+                'previously_assigned_staff_id' => $previouslyAssignedTo,
+                'assigned_staff_id' => $assignedTo,
                 ...$metadata,
             ],
         );

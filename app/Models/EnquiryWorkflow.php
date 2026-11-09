@@ -26,6 +26,7 @@ class EnquiryWorkflow extends Model
         'metadata',
         'started_at',
         'completed_at',
+        'last_activity_at',
     ];
 
     protected function casts(): array

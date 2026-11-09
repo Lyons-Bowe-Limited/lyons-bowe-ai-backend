@@ -3,6 +3,7 @@
 namespace App\Services\Enquiries;
 
 use App\Data\Enquiries\StepResult;
+use App\Enums\PracticeArea;
 use App\Models\Enquiry;
 use App\Models\EnquiryAnswer;
 use App\Models\EnquiryWorkflow;
@@ -17,10 +18,10 @@ class EnquiryWorkflowService
         private readonly WorkflowDefinitionService $definitions,
         private readonly WorkflowBranchResolver $branchResolver,
         private readonly WorkflowAnswerValidator $answerValidator,
-        private readonly EnquiryReferenceService $references,
+        private readonly EnquiryCreationService $creation,
+        private readonly EnquiryQualificationService $qualification,
         private readonly EnquiryEventService $events,
-    ) {
-    }
+    ) {}
 
     /**
      * Start a new enquiry and return the first workflow step.
@@ -50,11 +51,7 @@ class EnquiryWorkflowService
             $definition,
             $firstStep,
         ): StepResult {
-            $enquiry = Enquiry::query()->create([
-                'reference' => $this->references->generate(
-                    $practiceArea
-                ),
-
+            $enquiry = $this->creation->getOrCreate($conversationId, [
                 'user_id' => $user?->id,
                 'conversation_id' => $conversationId,
 
@@ -69,9 +66,7 @@ class EnquiryWorkflowService
                 */
                 'client_name' => $user?->name,
                 'client_email' => $user?->email,
-                'client_phone' => $user?->phone
-                    ?? $user?->mobile
-                    ?? null,
+                'client_phone' => $user?->contact_number,
 
                 'completion_percentage' => 0,
                 'started_at' => now(),
@@ -82,22 +77,35 @@ class EnquiryWorkflowService
                 ],
             ]);
 
+            $enquiry = Enquiry::query()->whereKey($enquiry->id)->lockForUpdate()->firstOrFail();
+            if ($existingWorkflow = $enquiry->workflow) {
+                if ($existingWorkflow->workflow_key !== $workflowKey) {
+                    throw ValidationException::withMessages(['conversation_id' => 'Use a separate conversation for a separate legal matter.']);
+                }
+
+                return $this->buildResult($enquiry, $existingWorkflow);
+            }
+
+            if ($enquiry->practice_area !== PracticeArea::Unclassified->value && $enquiry->practice_area !== $practiceArea) {
+                throw ValidationException::withMessages(['conversation_id' => 'Use a separate conversation for a separate legal matter.']);
+            }
+
+            $enquiry->update(['workflow_key' => $workflowKey, 'status' => 'in_progress']);
             $workflow = $enquiry->workflow()->create([
                 'workflow_key' => $workflowKey,
-                'workflow_version' =>
-                    (string) ($definition['version'] ?? '1.0'),
+                'workflow_version' => (string) ($definition['version'] ?? '1.0'),
                 'status' => 'in_progress',
                 'current_step_key' => $firstStep['key'],
                 'answered_steps' => 0,
-                'total_applicable_steps' =>
-                    $this->definitions->countSteps(
-                        $workflowKey
-                    ),
+                'total_applicable_steps' => $this->definitions->countSteps(
+                    $workflowKey
+                ),
                 'state' => [
-                    'visited_steps' => [],
-                    'completed_steps' => [],
+                'visited_steps' => [],
+                'completed_steps' => [],
                 ],
                 'started_at' => now(),
+                'last_activity_at' => now(),
             ]);
 
             $this->events->workflowStarted(
@@ -110,7 +118,7 @@ class EnquiryWorkflowService
                 enquiry: $enquiry,
                 workflow: $workflow,
             );
-        });
+        }, attempts: 3);
     }
 
     /**
@@ -250,8 +258,7 @@ class EnquiryWorkflowService
             $workflow->update([
                 'current_step_key' => $nextStepKey,
                 'answered_steps' => $answeredSteps,
-                'total_applicable_steps' =>
-                    $totalApplicableSteps,
+                'total_applicable_steps' => $totalApplicableSteps,
                 'state' => $state,
                 'last_activity_at' => now(),
             ]);
@@ -325,6 +332,8 @@ class EnquiryWorkflowService
             'completed_at' => now(),
             'last_activity_at' => now(),
         ]);
+
+        $this->qualification->completeWill($enquiry);
 
         $this->events->stepChanged(
             enquiry: $enquiry,
@@ -446,7 +455,7 @@ class EnquiryWorkflowService
         string $practiceArea
     ): string {
         return match ($practiceArea) {
-            'wills_and_probate' => 'will_enquiry_v1',
+            PracticeArea::Wills->value => 'will_enquiry_v1',
 
             default => throw ValidationException::withMessages([
                 'practice_area' => [

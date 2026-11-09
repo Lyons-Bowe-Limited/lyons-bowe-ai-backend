@@ -10,6 +10,7 @@ use App\Services\BookingLinkService;
 use App\Services\ClaudeService;
 use App\Services\ConsultationRecommendationService;
 use App\Services\ConversationContextService;
+use App\Services\Enquiries\EnquiryQualificationService;
 use App\Services\Enquiries\EnquiryWorkflowService;
 use App\Services\Enquiries\WorkflowAnswerInterpreter;
 use App\Services\Enquiries\WorkflowDefinitionService;
@@ -30,6 +31,7 @@ class AiPlaygroundController extends Controller
         ConsultationRecommendationService $consultationRecommendation,
         BookingLinkService $bookingLinks,
         EnquiryWorkflowService $enquiryWorkflow,
+        EnquiryQualificationService $enquiryQualification,
         WorkflowDefinitionService $workflowDefinitions,
         WorkflowIntentDetector $workflowIntentDetector,
         WorkflowAnswerInterpreter $workflowAnswerInterpreter,
@@ -64,6 +66,16 @@ class AiPlaygroundController extends Controller
             $request,
             $validated
         );
+
+        $metadata = $conversation->metadata ?? [];
+        foreach (['office', 'service'] as $key) {
+            if (! empty($validated[$key])) {
+                $metadata[$key] = $validated[$key];
+            }
+        }
+        if ($metadata !== $conversation->metadata) {
+            $conversation->update(['metadata' => $metadata]);
+        }
 
         $isFirstAssistantMessage = ! $conversation
             ->messages()
@@ -216,6 +228,19 @@ class AiPlaygroundController extends Controller
                 priority: 'normal'
             );
 
+            if ($result->completed) {
+                $reply = $workflowReplies->completed($result->enquiry->reference);
+                $this->storeWorkflowAssistantMessage($conversation, $reply, $result->enquiry, 'workflow_completed', null);
+
+                return $this->workflowResponse(
+                    conversation: $conversation,
+                    reply: $reply,
+                    enquiry: $result->enquiry,
+                    interactionType: 'workflow_completed',
+                    result: $result->toArray()
+                );
+            }
+
             if (! $result->currentStep) {
                 return response()->json([
                     'message' => 'The Will enquiry could not be started.',
@@ -269,6 +294,8 @@ class AiPlaygroundController extends Controller
             $conversation,
             $practiceArea
         );
+
+        $enquiryQualification->qualify($conversation, $memory, $consultation);
 
         $bookingLink = null;
 
@@ -348,8 +375,7 @@ class AiPlaygroundController extends Controller
                 'practice_area' => $practiceArea,
                 'matter_type' => $memory->matter_type,
                 'intent' => $memory->intent,
-                'conversation_stage' =>
-                    $memory->conversation_stage,
+                'conversation_stage' => $memory->conversation_stage,
 
                 'consultation_recommended' => (
                     $consultation['recommend'] ?? false
@@ -369,8 +395,7 @@ class AiPlaygroundController extends Controller
 
                 'booking_link_id' => $bookingLink?->id,
                 'booking_link_uuid' => $bookingLink?->uuid,
-                'booking_trigger_type' =>
-                    $bookingLink?->trigger_type,
+                'booking_trigger_type' => $bookingLink?->trigger_type,
             ],
         ]);
 
@@ -435,8 +460,7 @@ class AiPlaygroundController extends Controller
             'conversation_context' => [
                 'matter_type' => $memory->matter_type,
                 'intent' => $memory->intent,
-                'conversation_stage' =>
-                    $memory->conversation_stage,
+                'conversation_stage' => $memory->conversation_stage,
                 'summary' => $memory->summary,
                 'entities' => $memory->entities,
             ],
@@ -445,8 +469,7 @@ class AiPlaygroundController extends Controller
                 ->map(fn ($document) => [
                     'title' => $document->title,
                     'slug' => $document->slug,
-                    'practice_area' =>
-                        $document->practice_area,
+                    'practice_area' => $document->practice_area,
                 ])
                 ->values(),
 
@@ -457,12 +480,10 @@ class AiPlaygroundController extends Controller
                     'label' => 'Book a consultation',
                     'url' => $bookingLink->booking_url,
                     'name' => $bookingLink->name,
-                    'practice_area' =>
-                        $bookingLink->practice_area,
+                    'practice_area' => $bookingLink->practice_area,
                     'office' => $bookingLink->office,
                     'service' => $bookingLink->service,
-                    'trigger_type' =>
-                        $bookingLink->trigger_type,
+                    'trigger_type' => $bookingLink->trigger_type,
                 ]
                 : null,
         ]);
@@ -505,8 +526,7 @@ class AiPlaygroundController extends Controller
                 'enquiry_reference' => $enquiry->reference,
                 'workflow_key' => $enquiry->workflow_key,
                 'workflow_step_key' => $stepKey,
-                'workflow_progress' =>
-                    $enquiry->completion_percentage,
+                'workflow_progress' => $enquiry->completion_percentage,
             ],
         ]);
     }
@@ -531,15 +551,12 @@ class AiPlaygroundController extends Controller
             'interaction' => [
                 'type' => $interactionType,
                 'enquiry_id' => $enquiry->id,
-                'enquiry_reference' =>
-                    $enquiry->reference,
+                'enquiry_reference' => $enquiry->reference,
                 'workflow_active' => ! $completed,
                 'workflow_completed' => $completed,
                 'workflow_key' => $enquiry->workflow_key,
-                'current_step_key' =>
-                    $enquiry->workflow?->current_step_key,
-                'progress' =>
-                    $enquiry->completion_percentage,
+                'current_step_key' => $enquiry->workflow?->current_step_key,
+                'progress' => $enquiry->completion_percentage,
             ],
 
             'workflow' => $result,

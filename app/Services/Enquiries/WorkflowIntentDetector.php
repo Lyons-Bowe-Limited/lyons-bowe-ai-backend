@@ -2,6 +2,7 @@
 
 namespace App\Services\Enquiries;
 
+use App\Enums\PracticeArea;
 use Illuminate\Support\Str;
 
 class WorkflowIntentDetector
@@ -20,7 +21,7 @@ class WorkflowIntentDetector
         if ($this->isClearWillStartIntent($message)) {
             return [
                 'intent' => 'start_enquiry',
-                'practice_area' => 'wills_and_probate',
+                'practice_area' => PracticeArea::Wills->value,
                 'workflow_key' => 'will_enquiry_v1',
                 'confidence' => 1.0,
             ];

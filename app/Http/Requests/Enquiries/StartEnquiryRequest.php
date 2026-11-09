@@ -2,7 +2,9 @@
 
 namespace App\Http\Requests\Enquiries;
 
+use App\Enums\PracticeArea;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 class StartEnquiryRequest extends FormRequest
 {
@@ -17,7 +19,7 @@ class StartEnquiryRequest extends FormRequest
             'practice_area' => [
                 'required',
                 'string',
-                'in:wills_and_probate',
+                Rule::in([PracticeArea::Wills->value]),
             ],
 
             'workflow_key' => [
@@ -29,7 +31,7 @@ class StartEnquiryRequest extends FormRequest
             'conversation_id' => [
                 'nullable',
                 'integer',
-                'exists:ai_conversations,id',
+                Rule::exists('ai_conversations', 'id')->where('user_id', $this->user()?->id),
             ],
 
             'priority' => [
@@ -43,14 +45,11 @@ class StartEnquiryRequest extends FormRequest
     public function messages(): array
     {
         return [
-            'practice_area.required' =>
-                'A practice area is required.',
+            'practice_area.required' => 'A practice area is required.',
 
-            'practice_area.in' =>
-                'The selected practice area is not supported.',
+            'practice_area.in' => 'The selected practice area is not supported.',
 
-            'conversation_id.exists' =>
-                'The selected AI conversation does not exist.',
+            'conversation_id.exists' => 'The selected AI conversation does not exist.',
         ];
     }
 }
