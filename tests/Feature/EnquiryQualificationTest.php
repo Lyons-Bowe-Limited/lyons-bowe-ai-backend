@@ -50,6 +50,43 @@ class EnquiryQualificationTest extends TestCase
         ]);
     }
 
+    public function test_staging_unclassified_enquiry_recovers_from_latest_persisted_memory(): void
+    {
+        $conversation = $this->conversation();
+        $staleMemory = $this->memory($conversation, ['practice_area' => 'general', 'matter_type' => null, 'intent' => null]);
+        $enquiry = Enquiry::create([
+            'conversation_id' => $conversation->id, 'user_id' => $conversation->user_id,
+            'reference' => 'STAGING-REGRESSION', 'workflow_key' => 'victoria_conversation',
+            'practice_area' => 'unclassified', 'matter_type' => null,
+            'classification_confidence' => 0.95, 'classification_source' => 'victoria',
+            'requires_review' => true, 'handoff_reason' => 'classification_requires_review',
+            'client_name' => 'Collected Name', 'client_email' => 'collected@example.com', 'client_phone' => '+447700900999',
+        ]);
+        $this->travel(1)->minutes();
+        AiConversationMemory::whereKey($staleMemory->id)->update([
+            'practice_area' => 'property_law', 'matter_type' => 'conveyancing_purchase',
+            'practice_area_confidence' => 0.95, 'intent' => 'instruct_solicitor', 'intent_confidence' => 0.90,
+            'conversation_stage' => 'consultation_ready', 'consultation_recommended' => true,
+        ]);
+        $this->assertTrue($staleMemory->fresh()->updated_at->greaterThan($enquiry->updated_at));
+        $service = app(EnquiryQualificationService::class);
+        $result = $service->qualify($conversation, $staleMemory, []);
+        $this->assertTrue($result->qualified);
+        $this->assertSame($enquiry->id, $result->enquiry->id);
+        $this->assertSame('property_law', $result->enquiry->practice_area);
+        $this->assertSame('conveyancing_purchase', $result->enquiry->matter_type);
+        $this->assertSame(0.95, $result->enquiry->classification_confidence);
+        $this->assertSame('victoria', $result->enquiry->classification_source);
+        $this->assertFalse($result->enquiry->requires_review);
+        $this->assertNotNull($result->enquiry->qualified_at);
+        $this->assertNotNull($result->enquiry->submitted_at);
+        $service->qualify($conversation, $staleMemory, []);
+        $this->assertDatabaseCount('enquiries', 1);
+        foreach (['enquiry_classified', 'enquiry_qualified', 'enquiry_submitted', 'enquiry_ready_for_assignment'] as $type) {
+            $this->assertSame(1, $enquiry->events()->where('event_type', $type)->count());
+        }
+    }
+
     public function test_ordinary_qualified_conversation_populates_one_enquiry_and_events(): void
     {
         $conversation = $this->conversation();
@@ -98,7 +135,8 @@ class EnquiryQualificationTest extends TestCase
         $this->assertTrue($result->enquiry->requires_review);
         $this->assertNull($result->enquiry->qualified_at);
         $this->assertNull($result->enquiry->submitted_at);
-        $this->assertDatabaseHas('enquiry_events', ['event_type' => 'classification_requires_review']);
+        $this->assertSame('qualification_confidence_too_low', $result->enquiry->handoff_reason);
+        $this->assertDatabaseHas('enquiry_events', ['event_type' => 'enquiry_qualification_requires_review']);
         $this->assertDatabaseMissing('enquiry_events', ['event_type' => 'enquiry_ready_for_assignment']);
     }
 
@@ -245,7 +283,7 @@ class EnquiryQualificationTest extends TestCase
         $second = $this->qualify($conversation, $memory)->enquiry;
         $this->assertSame($first->id, $second->id);
         $this->assertFalse($second->requires_review);
-        $this->assertDatabaseCount('enquiry_events', 4);
+        $this->assertDatabaseCount('enquiry_events', 5);
     }
 
     public function test_enquiries_without_questionnaire_workflows_are_readable(): void
@@ -288,7 +326,7 @@ class EnquiryQualificationTest extends TestCase
         $this->assertNull($after['assigned_staff_id']);
     }
 
-    public function test_lost_contact_details_revoke_existing_readiness_without_erasing_submission_history(): void
+    public function test_collected_operational_contacts_are_retained_when_account_details_are_missing(): void
     {
         $conversation = $this->conversation();
         $memory = $this->memory($conversation);
@@ -296,10 +334,142 @@ class EnquiryQualificationTest extends TestCase
         $conversation->user->update(['email' => 'invalid', 'contact_number' => null]);
         $result = $this->qualify($conversation, $memory);
         $this->assertSame($first->id, $result->enquiry->id);
-        $this->assertFalse($result->qualified);
-        $this->assertTrue($result->enquiry->requires_review);
+        $this->assertTrue($result->qualified);
+        $this->assertFalse($result->enquiry->requires_review);
+        $this->assertSame($first->client_email, $result->enquiry->client_email);
+        $this->assertSame($first->client_phone, $result->enquiry->client_phone);
         $this->assertNotNull($result->enquiry->submitted_at);
         $this->assertDatabaseCount('enquiries', 1);
+    }
+
+    public function test_missing_contact_has_its_own_review_reason_and_preserves_correct_classification(): void
+    {
+        $conversation = $this->conversation();
+        $memory = $this->memory($conversation, ['matter_type' => 'conveyancing_purchase']);
+        $enquiry = $this->qualify($conversation, $memory)->enquiry;
+        $conversation->user->update(['email' => 'invalid', 'contact_number' => null]);
+        $enquiry->update(['client_email' => null, 'client_phone' => null]);
+        $result = $this->qualify($conversation, $memory);
+        $this->assertFalse($result->qualified);
+        $this->assertSame('contact_details_incomplete', $result->reason);
+        $this->assertSame('property_law', $result->enquiry->practice_area);
+        $this->assertSame('conveyancing_purchase', $result->enquiry->matter_type);
+        $this->assertTrue($result->enquiry->requires_review);
+        $this->assertNotNull($result->enquiry->submitted_at);
+        $this->assertDatabaseMissing('enquiry_events', ['event_type' => 'classification_requires_review']);
+        $this->assertDatabaseHas('enquiry_events', ['event_type' => 'enquiry_qualification_requires_review']);
+    }
+
+    public function test_low_intent_confidence_has_its_own_reason_on_an_existing_enquiry(): void
+    {
+        $conversation = $this->conversation();
+        $memory = $this->memory($conversation, ['intent' => 'instruct_solicitor', 'matter_type' => 'conveyancing_purchase']);
+        $enquiry = $this->qualify($conversation, $memory)->enquiry;
+        $memory->update(['intent_confidence' => 0.2]);
+        $result = app(EnquiryQualificationService::class)->qualify($conversation, $memory, ['recommend' => true]);
+        $this->assertFalse($result->qualified);
+        $this->assertSame('qualification_confidence_too_low', $result->reason);
+        $this->assertSame('property_law', $result->enquiry->practice_area);
+        $this->assertSame('conveyancing_purchase', $result->enquiry->matter_type);
+        $this->assertSame($enquiry->id, $result->enquiry->id);
+    }
+
+    public function test_unrecognised_classification_has_classification_review_reason(): void
+    {
+        $conversation = $this->conversation();
+        $result = $this->qualify($conversation, $this->memory($conversation, ['matter_type' => 'unknown']));
+        $this->assertSame('classification_requires_review', $result->reason);
+        $this->assertDatabaseHas('enquiry_events', ['event_type' => 'classification_requires_review']);
+    }
+
+    public function test_memory_contacts_merge_with_account_details_and_are_saved_before_readiness(): void
+    {
+        $conversation = $this->conversation(['email' => 'invalid', 'contact_number' => null]);
+        $memory = $this->memory($conversation, ['entities' => ['contact_details' => ['email' => 'derived@example.com', 'phone' => '+447700900555']]]);
+        $result = $this->qualify($conversation, $memory);
+        $this->assertTrue($result->qualified);
+        $this->assertSame($conversation->user->name, $result->enquiry->client_name);
+        $this->assertSame('derived@example.com', $result->enquiry->client_email);
+        $this->assertSame('+447700900555', $result->enquiry->client_phone);
+        $this->assertDatabaseCount('enquiries', 1);
+    }
+
+    public function test_account_contacts_win_over_derived_contacts_without_repetition_in_chat(): void
+    {
+        $conversation = $this->conversation();
+        $memory = $this->memory($conversation, ['entities' => ['name' => 'Derived Name', 'email' => 'derived@example.com', 'phone' => '+447700900555']]);
+        // A cached user relationship must not conceal current account details.
+        $conversation->load('user');
+        User::whereKey($conversation->user_id)->update(['name' => 'Current Account Name']);
+        $result = $this->qualify($conversation, $memory);
+        $this->assertTrue($result->qualified);
+        $this->assertSame('Current Account Name', $result->enquiry->client_name);
+        $this->assertSame($conversation->user->email, $result->enquiry->client_email);
+        $this->assertSame('+447700900123', $result->enquiry->client_phone);
+    }
+
+    public function test_fresh_victoria_memory_cannot_overwrite_a_concurrent_staff_correction(): void
+    {
+        $conversation = $this->conversation();
+        $memory = $this->memory($conversation);
+        $enquiry = $this->qualify($conversation, $memory)->enquiry;
+        $conversation->load('enquiry');
+        $corrected = [
+            'classification_source' => 'staff', 'practice_area' => 'family_law',
+            'matter_type' => 'staff_specific_family_matter', 'classification_confidence' => 0.75,
+        ];
+        Enquiry::whereKey($enquiry->id)->update($corrected);
+        $memory->update(['matter_type' => 'conveyancing_purchase', 'practice_area_confidence' => 0.99]);
+        $result = $this->qualify($conversation, $memory);
+        foreach ($corrected as $field => $value) {
+            $this->assertSame($value, $result->enquiry->{$field});
+        }
+        $this->assertTrue($result->qualified);
+        $this->assertSame('staff', $result->source);
+        $this->assertDatabaseCount('enquiries', 1);
+    }
+
+    public function test_unsaved_memory_changes_do_not_override_persisted_classification(): void
+    {
+        $conversation = $this->conversation();
+        $memory = $this->memory($conversation, ['matter_type' => 'conveyancing_purchase']);
+        $memory->practice_area = 'family_law';
+        $memory->matter_type = 'divorce';
+        $result = $this->qualify($conversation, $memory);
+        $this->assertSame('property_law', $result->enquiry->practice_area);
+        $this->assertSame('conveyancing_purchase', $result->enquiry->matter_type);
+    }
+
+    public function test_chat_qualifies_only_after_context_and_consultation_state_are_persisted(): void
+    {
+        $conversation = $this->conversation();
+        $this->memory($conversation, ['practice_area' => 'general', 'matter_type' => null]);
+        $service = app(EnquiryQualificationService::class);
+        $this->mock(EnquiryQualificationService::class, function ($mock) use ($service) {
+            $mock->shouldReceive('qualify')->once()->andReturnUsing(function ($conversation, $memory, $consultation) use ($service) {
+                $persisted = $memory->fresh();
+                $this->assertSame('property_law', $persisted->practice_area);
+                $this->assertSame('conveyancing_purchase', $persisted->matter_type);
+                $this->assertSame('consultation_ready', $persisted->conversation_stage);
+                $this->assertTrue($persisted->consultation_recommended);
+                $this->assertTrue($persisted->metadata['last_consultation_result']['recommend']);
+                $this->assertFalse($memory->isDirty());
+
+                return $service->qualify($conversation, $memory, $consultation);
+            });
+        });
+        $this->mock(ClaudeService::class, function ($mock) {
+            $mock->shouldReceive('extractConversationContext')->once()->andReturn([
+                'practice_area' => 'property_law', 'matter_type' => 'conveyancing_purchase',
+                'practice_area_confidence' => 0.95, 'intent' => 'instruct_solicitor', 'intent_confidence' => 0.90,
+                'conversation_stage' => 'information_gathering',
+            ]);
+            $mock->shouldReceive('chat')->once()->andReturn('Test reply');
+        });
+        $this->actingAs($conversation->user)->postJson('/api/ai/playground/chat', [
+            'message' => 'I am buying a property. Please contact me.', 'conversation_id' => $conversation->uuid,
+        ])->assertOk();
+        $this->assertDatabaseHas('enquiries', ['conversation_id' => $conversation->id, 'practice_area' => 'property_law', 'matter_type' => 'conveyancing_purchase', 'requires_review' => false]);
     }
 
     private function finalWillStep(): void
@@ -345,7 +515,7 @@ class EnquiryQualificationTest extends TestCase
         $result = $service->submitAnswer($start->enquiry, 'confirm', true);
         $this->assertTrue($result->completed);
         $this->assertTrue($result->enquiry->requires_review);
-        $this->assertSame('missing_contact_details', $result->enquiry->handoff_reason);
+        $this->assertSame('contact_details_incomplete', $result->enquiry->handoff_reason);
         $this->assertNull($result->enquiry->qualified_at);
         $this->assertNull($result->enquiry->submitted_at);
         $this->assertDatabaseMissing('enquiry_events', ['event_type' => 'enquiry_ready_for_assignment']);

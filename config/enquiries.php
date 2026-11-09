@@ -6,6 +6,7 @@ return [
     'legal_intents' => ['seek_legal_help', 'legal_advice', 'start_enquiry', 'instruct_solicitor', 'request_consultation', 'book_consultation'],
     'explicit_consultation_reasons' => ['user_requested_consultation', 'solicitor_review_requested', 'matter_requires_solicitor'],
     'matter_types' => [
+        'conveyancing_purchase' => ['practice_area' => 'property_law', 'aliases' => ['conveyancing purchase']],
         'buying_a_property' => ['practice_area' => 'property_law', 'aliases' => ['buying', 'property_purchase', 'buying_property', 'purchase']],
         'selling_a_property' => ['practice_area' => 'property_law', 'aliases' => ['selling', 'property_sale', 'selling_property', 'sale']],
         'remortgage' => ['practice_area' => 'property_law', 'aliases' => ['remortgaging']],

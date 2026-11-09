@@ -53,24 +53,31 @@ canonical matter mappings and aliases:
 | Matter | Practice area | Example aliases |
 | --- | --- | --- |
 | buying_a_property | property_law | property_purchase, buying_property |
+| conveyancing_purchase | property_law | conveyancing purchase |
 | selling_a_property | property_law | property_sale, selling_property |
 | remortgage | property_law | remortgaging |
 | divorce_and_separation | family_law | divorce, separation |
 | making_a_will | wills_and_probate | will, making_will, will_enquiry_v1 |
 | probate | wills_and_probate | estate_administration, grant_of_probate |
 
-Ordinary chat calls `EnquiryQualificationService` after memory refresh and
-consultation evaluation. It returns a typed `QualificationResult`. Casual and
-incomplete requests return a decision without creating an enquiry. Missing contact
-data on an existing qualified record revokes readiness by setting requires_review,
-while retaining historical qualification/submission timestamps.
+Ordinary chat calls `EnquiryQualificationService` after memory refresh,
+consultation evaluation and persistence of the consultation result. Qualification
+locks and reloads persisted memory before deciding; unsaved/cached attributes are
+not classification evidence. The actual stage field is `conversation_stage`.
+It returns a typed `QualificationResult`. Casual and
+incomplete requests return a decision without creating an enquiry. Contacts are
+merged from current account name/email/contact_number, valid collected enquiry
+contacts, then memory entities and conversation metadata. Existing collected
+contacts are retained when an account field is missing. If all usable contact
+channels are missing, requires_review revokes readiness while historical
+qualification/submission timestamps remain intact.
 Persistence requires all of:
 
 - Consultation recommended, plus legal-matter evidence (recognised area/type or
   recognised legal intent).
 - Explicit consultation/review/escalation reason, **or** a configured legal intent
   meeting `intent_confidence_threshold` (initially 0.80).
-- Nonblank account name and at least one valid contact channel: valid email or
+- Nonblank merged client name and at least one valid contact channel: valid email or
   a contact number containing 7–15 digits.
 
 Automatic qualification/submission additionally requires a canonical practice
@@ -87,7 +94,11 @@ Ordinary enquiries use `workflow_key = victoria_conversation`, without creating
 an `enquiry_workflows` row. They remain readable through the existing enquiry GET.
 Qualification creates three audit events once: `enquiry_qualified`,
 `enquiry_submitted`, `enquiry_ready_for_assignment` (last only if unassigned).
-Review transitions record `classification_requires_review`, including the reason.
+Unclassified-to-classified transitions record `enquiry_classified`. Invalid or
+unknown classifications use `classification_requires_review`. Contact failures
+use handoff reason `contact_details_incomplete`; classification/intent confidence
+failures use `qualification_confidence_too_low`. These latter review transitions
+use `enquiry_qualification_requires_review`, not the classification-review event.
 All use `enquiry_events`, within the same transaction. No notifications are sent.
 
 ## Will completion and population
@@ -135,3 +146,26 @@ Validated on 9 November 2026:
 The Staff filter also matches two new enquiry tests concerning staff assignment
 and staff classification. Changed PHP files were formatted with Pint, and
 `git diff --check` passed.
+
+## Phase 1 staging regression fix
+
+The mapping omitted `conveyancing_purchase`, rejecting an otherwise canonical
+`property_law` classification at 0.95 confidence. It is now an accepted matter
+value and is copied unchanged. Context extraction was already persisted before
+qualification; the later consultation-result save explained the observed newer
+memory timestamp. That save now happens before qualification. The application
+locks/reloads persisted memory and the existing enquiry, merges contacts before
+evaluating and saving, and permits later Victoria memory to repair an unclassified
+Victoria enquiry. Staff classification fields remain untouched, including specific
+staff matter types outside the AI mapping. Stage alone still cannot qualify.
+
+Regression coverage includes the exact staging fields, stale and unsaved memory,
+contact fallback/precedence, reason separation, persisted controller ordering,
+classification/qualification audit events, repeat calls and cached staff corrections.
+No migrations, staging data repairs or Phase 2 work are part of this fix.
+
+
+Staging-fix validation: `php artisan test --filter=Enquiry` passed with 40 tests /
+219 assertions; `php artisan test` passed with 134 tests / 524 assertions.
+Pint `--test` and `git diff --check` passed. Tests use disposable SQLite databases;
+no staging records were changed.

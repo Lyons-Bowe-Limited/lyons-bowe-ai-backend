@@ -16,88 +16,91 @@ class EnquiryQualificationService
         private readonly EnquiryEventService $events,
     ) {}
 
-    public function decide(AiConversation $conversation, ?AiConversationMemory $memory, array $consultation = [], bool $willCompleted = false): QualificationResult
+    public function decide(AiConversation $conversation, ?AiConversationMemory $memory, array $consultation = [], bool $willCompleted = false, ?Enquiry $enquiry = null): QualificationResult
     {
-        $user = $conversation->user;
-        $contactComplete = $this->hasContact($user?->name, $user?->email, $user?->contact_number);
+        // Never classify from a caller's stale or unsaved model attributes.
+        $memory = $memory?->fresh();
+        if ($memory && (int) $memory->ai_conversation_id !== (int) $conversation->id) {
+            throw new \InvalidArgumentException('Memory does not belong to this conversation.');
+        }
+        $enquiry ??= $conversation->enquiry()->first();
+        $contacts = $this->contacts($conversation, $memory, $enquiry);
+        $contactComplete = $this->hasContact(...array_values($contacts));
         $area = PracticeArea::normalise($memory?->practice_area);
         $matter = $this->matterType($memory?->matter_type);
         $confidence = max(0, min(1, (float) ($memory?->practice_area_confidence ?? 0)));
         $source = 'victoria';
 
         if ($willCompleted) {
-            // Completion of the deterministic Will workflow is stronger evidence
-            // than stale memory from before the questionnaire began.
             $area = PracticeArea::Wills;
             $matter = 'making_a_will';
             $confidence = 1;
             $source = 'workflow';
         }
 
+        // Staff classification is authoritative before evaluating readiness,
+        // including specific staff matter types outside the AI mapping.
+        if ($enquiry?->classification_source === 'staff') {
+            $area = PracticeArea::normalise($enquiry->practice_area);
+            $matter = $enquiry->matter_type;
+            $confidence = (float) ($enquiry->classification_confidence ?? 1);
+            $source = 'staff';
+        }
+        $classificationValid = $area !== PracticeArea::Unclassified && filled($matter)
+            && ($source === 'staff' || config("enquiries.matter_types.{$matter}.practice_area") === $area->value);
+        $classificationConfident = $source === 'staff' || $confidence >= config('enquiries.classification_confidence_threshold');
         $explicitRequest = in_array($consultation['reason'] ?? null, config('enquiries.explicit_consultation_reasons'), true);
-        $recognisedIntent = in_array(PracticeArea::key($memory?->intent), config('enquiries.legal_intents'), true)
-            && (float) ($memory?->intent_confidence ?? 0) >= config('enquiries.intent_confidence_threshold');
+        $recognisedIntent = in_array(PracticeArea::key($memory?->intent), config('enquiries.legal_intents'), true);
+        $intentConfident = (float) ($memory?->intent_confidence ?? 0) >= config('enquiries.intent_confidence_threshold');
+        $recommended = $consultation['recommend'] ?? $memory?->consultation_recommended ?? false;
         $legalEvidence = $area !== PracticeArea::Unclassified || $matter !== null || $recognisedIntent;
-        $hasIntent = $willCompleted || (($consultation['recommend'] ?? false) && $legalEvidence && ($explicitRequest || $recognisedIntent));
-        $shouldPersist = $willCompleted || ($hasIntent && $contactComplete);
-        $classificationCertain = $area !== PracticeArea::Unclassified
-            && $matter !== null
-            && config("enquiries.matter_types.{$matter}.practice_area") === $area->value
-            && $confidence >= config('enquiries.classification_confidence_threshold');
+        $intentSignal = $willCompleted || ($recommended && $legalEvidence && ($explicitRequest || $recognisedIntent));
+        $hasIntent = $intentSignal && ($willCompleted || $explicitRequest || $intentConfident);
+        $qualified = $hasIntent && $contactComplete && $classificationValid && $classificationConfident;
 
-        if (! $classificationCertain) {
+        $reason = match (true) {
+            ! $classificationValid => 'classification_requires_review',
+            ! $classificationConfident, $intentSignal && ! $hasIntent => 'qualification_confidence_too_low',
+            ! $contactComplete => 'contact_details_incomplete',
+            ! $hasIntent => 'insufficient_legal_intent',
+            $source === 'staff' => 'staff_classification_confirmed',
+            $willCompleted => 'will_workflow_completed',
+            default => $consultation['reason'] ?? 'legal_intent_confirmed',
+        };
+        if ((! $classificationValid || ! $classificationConfident) && $source !== 'staff') {
             $area = PracticeArea::Unclassified;
             $matter = null;
         }
+        $shouldPersist = $willCompleted || ($hasIntent && $contactComplete) || ($enquiry !== null && $intentSignal);
 
-        $qualified = $hasIntent && $contactComplete && $classificationCertain;
-        $reason = ! $contactComplete ? 'missing_contact_details'
-            : (! $hasIntent ? 'insufficient_legal_intent'
-                : (! $classificationCertain ? 'classification_requires_review' : ($willCompleted ? 'will_workflow_completed' : ($consultation['reason'] ?? 'legal_intent_confirmed'))));
-
-        return new QualificationResult($shouldPersist, $qualified, $area, $matter, $confidence, $source, ! $qualified, $reason);
+        return new QualificationResult($shouldPersist, $qualified, $area, $matter, $confidence, $source, ! $qualified, $reason, contactDetails: $contacts);
     }
 
     public function qualify(AiConversation $conversation, AiConversationMemory $memory, array $consultation): QualificationResult
     {
-        $decision = $this->decide($conversation, $memory, $consultation);
-        if (! $decision->shouldPersist) {
-            if ($decision->reason !== 'missing_contact_details') {
+        return DB::transaction(function () use ($conversation, $memory, $consultation) {
+            // Match the creation lock order. Hold the persisted memory stable
+            // through decision, update and audit events, including concurrent calls.
+            AiConversation::query()->whereKey($conversation->id)->lockForUpdate()->firstOrFail();
+            $memory = $conversation->memory()->whereKey($memory->id)->lockForUpdate()->firstOrFail();
+            $enquiry = $conversation->enquiry()->lockForUpdate()->first();
+            $workflow = $enquiry?->workflow;
+            $willCompleted = $workflow?->status === 'completed' && $workflow->workflow_key === 'will_enquiry_v1';
+            $decision = $this->decide($conversation, $memory, $consultation, $willCompleted, $enquiry);
+
+            if ($workflow && $workflow->status !== 'completed') {
+                return new QualificationResult(false, false, $decision->practiceArea, $decision->matterType, $decision->confidence, $decision->source, true, 'workflow_in_progress', $enquiry, $decision->contactDetails);
+            }
+            if (! $decision->shouldPersist) {
                 return $decision;
             }
-
-            // Missing contact must also revoke readiness on a previously qualified
-            // record, without creating an enquiry for an incomplete conversation.
-            return DB::transaction(function () use ($conversation, $memory, $decision) {
-                $existing = Enquiry::query()->where('conversation_id', $conversation->id)->lockForUpdate()->first();
-                if (! $existing || $existing->workflow()->where('status', '!=', 'completed')->exists()) {
-                    return $decision;
-                }
-
-                return $this->apply($existing, $conversation, $memory, $decision);
-            }, attempts: 3);
-        }
-
-        return DB::transaction(function () use ($conversation, $memory, $decision) {
-            $enquiry = $this->creation->getOrCreate($conversation->id, [
+            $enquiry ??= $this->creation->getOrCreate($conversation->id, [
                 'user_id' => $conversation->user_id,
                 'practice_area' => $decision->practiceArea->value,
-                // Ordinary enquiries do not have a questionnaire workflow.
                 'workflow_key' => 'victoria_conversation',
                 'status' => 'draft',
                 'started_at' => now(),
             ]);
-            $enquiry = Enquiry::query()->whereKey($enquiry->id)->lockForUpdate()->firstOrFail();
-
-            // A Will journey owns its own completion transition.
-            $workflow = $enquiry->workflow;
-            if ($workflow && $workflow->status !== 'completed') {
-                return new QualificationResult(false, false, $decision->practiceArea, $decision->matterType, $decision->confidence, $decision->source, true, 'workflow_in_progress', $enquiry);
-            }
-
-            if ($workflow?->status === 'completed' && $workflow->workflow_key === 'will_enquiry_v1') {
-                $decision = $this->decide($conversation, $memory, willCompleted: true);
-            }
 
             return $this->apply($enquiry, $conversation, $memory, $decision);
         }, attempts: 3);
@@ -107,45 +110,37 @@ class EnquiryQualificationService
     public function completeWill(Enquiry $enquiry): void
     {
         $conversation = $enquiry->conversation;
+        $memory = $conversation?->memory()->first();
         if ($conversation) {
-            $this->apply($enquiry, $conversation, $conversation->memory, $this->decide($conversation, $conversation->memory, willCompleted: true));
-
-            return;
+            $decision = $this->decide($conversation, $memory, willCompleted: true, enquiry: $enquiry);
+        } else {
+            $contacts = $this->contacts(null, null, $enquiry);
+            $complete = $this->hasContact(...array_values($contacts));
+            $staff = $enquiry->classification_source === 'staff';
+            $area = $staff ? PracticeArea::normalise($enquiry->practice_area) : PracticeArea::Wills;
+            $matter = $staff ? $enquiry->matter_type : 'making_a_will';
+            $valid = $area !== PracticeArea::Unclassified && filled($matter);
+            $qualified = $complete && $valid;
+            $reason = ! $valid ? 'classification_requires_review' : ($complete ? 'will_workflow_completed' : 'contact_details_incomplete');
+            $decision = new QualificationResult(true, $qualified, $area, $matter, $staff ? (float) ($enquiry->classification_confidence ?? 1) : 1, $staff ? 'staff' : 'workflow', ! $qualified, $reason, contactDetails: $contacts);
         }
-
-        // Direct workflow API also supports enquiries without conversations.
-        $user = $enquiry->user;
-        $complete = $this->hasContact($user?->name, $user?->email, $user?->contact_number);
-        $decision = new QualificationResult(true, $complete, PracticeArea::Wills, 'making_a_will', 1, 'workflow', ! $complete, $complete ? 'will_workflow_completed' : 'missing_contact_details');
-        $this->apply($enquiry, null, null, $decision);
+        $this->apply($enquiry, $conversation, $memory, $decision);
     }
 
     private function apply(Enquiry $enquiry, ?AiConversation $conversation, ?AiConversationMemory $memory, QualificationResult $decision): QualificationResult
     {
-        $user = $conversation?->user ?? $enquiry->user;
+        $previousArea = $enquiry->practice_area;
         $previousReview = $enquiry->requires_review;
-        $classification = [
+        $previousReason = $enquiry->handoff_reason;
+        $classification = $enquiry->classification_source === 'staff' ? [] : [
             'practice_area' => $decision->practiceArea->value,
             'matter_type' => $decision->matterType,
             'classification_confidence' => $decision->confidence,
             'classification_source' => $decision->source,
         ];
-        // Staff corrections are authoritative; AI refreshes cannot replace them.
-        if ($enquiry->classification_source === 'staff') {
-            $area = PracticeArea::normalise($enquiry->practice_area);
-            $matter = $this->matterType($enquiry->matter_type);
-            $certain = $area !== PracticeArea::Unclassified && $matter !== null
-                && config("enquiries.matter_types.{$matter}.practice_area") === $area->value;
-            $qualified = $certain && $this->hasContact($user?->name, $user?->email, $user?->contact_number);
-            $decision = new QualificationResult(true, $qualified, $area, $matter, (float) ($enquiry->classification_confidence ?? 1), 'staff', ! $qualified, $qualified ? 'staff_classification_confirmed' : ($certain ? 'missing_contact_details' : 'classification_requires_review'));
-            $classification = [];
-        }
-
         $attributes = [
             ...$classification,
-            'client_name' => $user ? $user->name : $enquiry->client_name,
-            'client_email' => $user ? $user->email : $enquiry->client_email,
-            'client_phone' => $user ? $user->contact_number : $enquiry->client_phone,
+            ...$decision->contactDetails,
             'office' => $conversation?->metadata['office'] ?? $enquiry->office,
             'recommended_service' => $conversation?->metadata['service'] ?? $enquiry->recommended_service,
             'requires_review' => $decision->requiresReview,
@@ -164,8 +159,13 @@ class EnquiryQualificationService
         }
         $enquiry->update($attributes);
 
-        if ($decision->requiresReview && ($previousReview !== true || ! $enquiry->events()->where('event_type', EnquiryEventService::CLASSIFICATION_REQUIRES_REVIEW)->exists())) {
-            $this->events->operational($enquiry, EnquiryEventService::CLASSIFICATION_REQUIRES_REVIEW);
+        if ($previousArea === PracticeArea::Unclassified->value && $enquiry->practice_area !== PracticeArea::Unclassified->value) {
+            $this->events->operational($enquiry, EnquiryEventService::ENQUIRY_CLASSIFIED);
+        }
+        $reviewEvent = $decision->reason === 'classification_requires_review'
+            ? EnquiryEventService::CLASSIFICATION_REQUIRES_REVIEW : EnquiryEventService::ENQUIRY_QUALIFICATION_REQUIRES_REVIEW;
+        if ($decision->requiresReview && ($previousReview !== true || $previousReason !== $decision->reason || ! $enquiry->events()->where('event_type', $reviewEvent)->exists())) {
+            $this->events->operational($enquiry, $reviewEvent);
         }
         if ($decision->qualified) {
             foreach ([EnquiryEventService::ENQUIRY_QUALIFIED, EnquiryEventService::ENQUIRY_SUBMITTED, EnquiryEventService::ENQUIRY_READY_FOR_ASSIGNMENT] as $type) {
@@ -178,14 +178,54 @@ class EnquiryQualificationService
             }
         }
 
-        return new QualificationResult(true, $decision->qualified, $decision->practiceArea, $decision->matterType, $decision->confidence, $decision->source, $decision->requiresReview, $decision->reason, $enquiry->fresh());
+        return new QualificationResult(true, $decision->qualified, $decision->practiceArea, $decision->matterType, $decision->confidence, $decision->source, $decision->requiresReview, $decision->reason, $enquiry->fresh(), $decision->contactDetails);
+    }
+
+    /** Account details win; retain collected operational details before AI-derived fallbacks. */
+    private function contacts(?AiConversation $conversation, ?AiConversationMemory $memory, ?Enquiry $enquiry): array
+    {
+        $user = $conversation?->user()->first() ?? $enquiry?->user()->first();
+        $entities = $memory?->entities ?? [];
+        $metadata = $conversation?->metadata ?? [];
+        $pick = function (array $values, callable $valid): ?string {
+            foreach ($values as $value) {
+                if (is_string($value) && trim($value) !== '' && $valid(trim($value))) {
+                    return trim($value);
+                }
+            }
+
+            return null;
+        };
+        $derived = function (array $keys) use ($entities, $metadata): array {
+            $values = [];
+            foreach ([$entities, $metadata] as $data) {
+                foreach (['', 'contact.', 'client.', 'contact_details.'] as $prefix) {
+                    foreach ($keys as $key) {
+                        $values[] = data_get($data, $prefix.$key);
+                    }
+                }
+            }
+
+            return $values;
+        };
+
+        return [
+            'client_name' => $pick([$user?->name, $enquiry?->client_name, ...$derived(['client_name', 'full_name', 'name'])], fn ($value) => true),
+            'client_email' => $pick([$user?->email, $enquiry?->client_email, ...$derived(['client_email', 'email'])], fn ($value) => filter_var($value, FILTER_VALIDATE_EMAIL) !== false),
+            'client_phone' => $pick([$user?->contact_number, $enquiry?->client_phone, ...$derived(['client_phone', 'contact_number', 'phone', 'mobile'])], $this->validPhone(...)),
+        ];
     }
 
     private function hasContact(?string $name, ?string $email, ?string $phone): bool
     {
-        $digits = preg_replace('/\D/', '', $phone ?? '');
+        return filled($name) && (filter_var($email, FILTER_VALIDATE_EMAIL) !== false || $this->validPhone($phone ?? ''));
+    }
 
-        return trim($name ?? '') !== '' && (filter_var($email, FILTER_VALIDATE_EMAIL) !== false || (strlen($digits) >= 7 && strlen($digits) <= 15));
+    private function validPhone(string $phone): bool
+    {
+        $digits = preg_replace('/\D/', '', $phone);
+
+        return strlen($digits) >= 7 && strlen($digits) <= 15;
     }
 
     private function matterType(?string $value): ?string

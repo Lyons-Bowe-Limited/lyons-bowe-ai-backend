@@ -8,6 +8,10 @@ use App\Models\EnquiryWorkflow;
 
 class EnquiryEventService
 {
+    public const ENQUIRY_CLASSIFIED = 'enquiry_classified';
+
+    public const ENQUIRY_QUALIFICATION_REQUIRES_REVIEW = 'enquiry_qualification_requires_review';
+
     public const ENQUIRY_QUALIFIED = 'enquiry_qualified';
 
     public const ENQUIRY_SUBMITTED = 'enquiry_submitted';

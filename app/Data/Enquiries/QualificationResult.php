@@ -17,5 +17,7 @@ readonly class QualificationResult
         public bool $requiresReview,
         public string $reason,
         public ?Enquiry $enquiry = null,
+        /** @var array{client_name: ?string, client_email: ?string, client_phone: ?string} */
+        public array $contactDetails = [],
     ) {}
 }

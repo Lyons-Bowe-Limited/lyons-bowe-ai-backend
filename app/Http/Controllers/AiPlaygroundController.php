@@ -295,8 +295,6 @@ class AiPlaygroundController extends Controller
             $practiceArea
         );
 
-        $enquiryQualification->qualify($conversation, $memory, $consultation);
-
         $bookingLink = null;
 
         if (($consultation['recommend'] ?? false) === true) {
@@ -306,6 +304,14 @@ class AiPlaygroundController extends Controller
                 $validated['service'] ?? null
             );
         }
+
+        // Persist the complete structured evaluation before operational handoff.
+        $memory = $conversationContext->recordConsultationResult(
+            $memory,
+            $consultation,
+            $bookingLink !== null
+        );
+        $enquiryQualification->qualify($conversation, $memory, $consultation);
 
         /*
          * Search the authorised Knowledge Bank.
@@ -405,13 +411,6 @@ class AiPlaygroundController extends Controller
                 'knowledge_document_id' => $document->id,
             ]);
         }
-
-        $memory = $conversationContext
-            ->recordConsultationResult(
-                $memory,
-                $consultation,
-                $bookingLink !== null
-            );
 
         $conversationMetadata = $conversation->metadata ?? [];
 
