@@ -6,6 +6,7 @@ use App\Http\Controllers\Api\V1\EnquiryAnswerController;
 use App\Http\Controllers\Api\V1\EnquiryController;
 use App\Http\Controllers\Api\V1\Internal\EnquiryController as InternalEnquiryController;
 use App\Http\Controllers\Api\V1\Internal\MyWorkEnquiryController;
+use App\Http\Controllers\Api\V1\Internal\StaffNotificationController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\StaffAuthController;
 use App\Http\Controllers\StaffInvitationController;
@@ -99,6 +100,13 @@ Route::prefix('staff')
         Route::prefix('my-work')->middleware('staff.permission:work.view-own')->group(function () {
             Route::get('/enquiries', [MyWorkEnquiryController::class, 'index']);
             Route::get('/counts', [MyWorkEnquiryController::class, 'counts']);
+        });
+
+        Route::prefix('notifications')->group(function () {
+            Route::get('/', [StaffNotificationController::class, 'index']);
+            Route::get('/unread-count', [StaffNotificationController::class, 'unreadCount']);
+            Route::patch('/read-all', [StaffNotificationController::class, 'readAll']);
+            Route::patch('/{notification}/read', [StaffNotificationController::class, 'read'])->whereUuid('notification');
         });
 
         Route::get('/roles', [StaffRoleController::class, 'index'])

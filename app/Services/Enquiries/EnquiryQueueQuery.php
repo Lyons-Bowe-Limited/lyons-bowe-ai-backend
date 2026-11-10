@@ -33,16 +33,18 @@ class EnquiryQueueQuery
         return $query->orderBy($filters['sort'] ?? 'created_at', $filters['direction'] ?? 'desc')->orderBy('id');
     }
 
-    public function counts(Builder $query): array
+    public function counts(Builder $query, bool $includeDraft = false): array
     {
         $counts = $query->selectRaw('COUNT(*) AS all_count,
             COALESCE(SUM(CASE WHEN status = ? THEN 1 ELSE 0 END), 0) AS submitted,
+            COALESCE(SUM(CASE WHEN status = ? THEN 1 ELSE 0 END), 0) AS draft_count,
             COALESCE(SUM(CASE WHEN assigned_staff_id IS NULL THEN 1 ELSE 0 END), 0) AS unassigned,
             COALESCE(SUM(CASE WHEN assigned_staff_id IS NOT NULL THEN 1 ELSE 0 END), 0) AS assigned,
-            COALESCE(SUM(CASE WHEN requires_review THEN 1 ELSE 0 END), 0) AS review_count', [EnquiryStatus::Submitted->value])->first();
+            COALESCE(SUM(CASE WHEN requires_review THEN 1 ELSE 0 END), 0) AS review_count', [EnquiryStatus::Submitted->value, EnquiryStatus::Draft->value])->first();
 
         return [
             'all' => (int) $counts->all_count, 'submitted' => (int) $counts->submitted,
+            ...($includeDraft ? ['draft' => (int) $counts->draft_count] : []),
             'unassigned' => (int) $counts->unassigned, 'assigned' => (int) $counts->assigned, 'requires_review' => (int) $counts->review_count,
         ];
     }

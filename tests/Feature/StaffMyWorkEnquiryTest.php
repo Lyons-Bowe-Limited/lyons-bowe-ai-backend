@@ -99,7 +99,7 @@ class StaffMyWorkEnquiryTest extends TestCase
         $this->enquiry($other);
         $this->enquiry(null, ['requires_review' => true]);
         $this->actingAs($solicitor, 'staff_sanctum')->getJson('/api/staff/my-work/counts?assigned_staff_id='.$other->id.'&scope=all&unassigned=1')->assertOk()->assertExactJson([
-            'data' => ['all' => 2, 'submitted' => 1, 'assigned' => 2, 'unassigned' => 0, 'requires_review' => 2],
+            'data' => ['all' => 2, 'submitted' => 1, 'draft' => 1, 'assigned' => 2, 'unassigned' => 0, 'requires_review' => 2],
         ]);
         $this->actingAs($other, 'staff_sanctum')->getJson('/api/staff/my-work/counts')->assertOk()->assertJsonPath('data.all', 1);
         $this->actingAs($this->staff(), 'staff_sanctum')->getJson('/api/staff/my-work/counts')->assertOk()->assertJsonPath('data.all', 0)->assertJsonPath('data.requires_review', 0);

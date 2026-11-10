@@ -27,7 +27,7 @@ class MyWorkEnquiryController extends Controller
     public function counts(Request $request, EnquiryQueueQuery $queues): JsonResponse
     {
         return response()->json(['data' => $queues->counts(
-            Enquiry::query()->where('assigned_staff_id', $request->user()->id)
+            Enquiry::query()->where('assigned_staff_id', $request->user()->id), includeDraft: true
         )]);
     }
 }

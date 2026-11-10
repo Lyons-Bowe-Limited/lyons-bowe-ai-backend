@@ -47,6 +47,11 @@ class StaffUser extends Authenticatable
         ];
     }
 
+    public function staffNotifications(): HasMany
+    {
+        return $this->hasMany(StaffNotification::class);
+    }
+
     public function assignedEnquiries(): HasMany
     {
         return $this->hasMany(Enquiry::class, 'assigned_staff_id');

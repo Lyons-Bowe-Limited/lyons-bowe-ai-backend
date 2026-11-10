@@ -101,7 +101,7 @@ from assigned_staff_id = authenticated staff ID before aggregation. Query
 parameters are not used to change its staff scope or apply list filters:
 
 ```json
-{"data":{"all":2,"submitted":1,"unassigned":0,"assigned":2,"requires_review":1}}
+{"data":{"all":2,"submitted":1,"draft":1,"unassigned":0,"assigned":2,"requires_review":1}}
 ```
 
 Unassigned is necessarily zero in this queue; assigned equals all. Empty queues
@@ -116,8 +116,8 @@ assignment appears for the new owner, reassignment removes it from the old owner
 and unassignment removes it from all My Work queues. Detail access follows the
 same ownership change. Existing enquiry_assigned/enquiry_reassigned/
 enquiry_unassigned events, actor IDs and before/after values are preserved.
-No frontend, notifications, client authentication or enquiry lifecycle changes
-are included.
+No frontend, client authentication or enquiry lifecycle changes are included.
+Assignment notifications are now supported; see [staff assignment notifications](staff-assignment-notifications.md).
 
 ## Changed files
 

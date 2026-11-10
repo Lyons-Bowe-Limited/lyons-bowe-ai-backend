@@ -4,6 +4,7 @@ namespace App\Services\Enquiries;
 
 use App\Enums\PracticeArea;
 use App\Models\Enquiry;
+use App\Models\StaffNotification;
 use App\Models\StaffUser;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -22,7 +23,7 @@ class InternalEnquiryService
                     throw ValidationException::withMessages(['assigned_staff_id' => 'The assignee must be an active staff user.']);
                 }
             }
-            $previous = $enquiry->assigned_staff_id;
+            $previous = $enquiry->assigned_staff_id === null ? null : (int) $enquiry->assigned_staff_id;
             if ($previous === $staffId) {
                 return $enquiry;
             }
@@ -30,6 +31,15 @@ class InternalEnquiryService
             $type = $staffId === null ? EnquiryEventService::ENQUIRY_UNASSIGNED
                 : ($previous === null ? EnquiryEventService::ENQUIRY_ASSIGNED : EnquiryEventService::ENQUIRY_REASSIGNED);
             $this->events->staffChange($enquiry, $actor, $type, ['assigned_staff_id' => $previous], ['assigned_staff_id' => $staffId]);
+            if ($staffId !== null) {
+                StaffNotification::create([
+                    'staff_user_id' => $staffId,
+                    'type' => StaffNotification::ENQUIRY_ASSIGNED,
+                    'title' => 'Enquiry assigned to you',
+                    'message' => sprintf('Enquiry %s for %s was assigned to you.', $enquiry->reference, $enquiry->client_name ?? 'a client'),
+                    'enquiry_id' => $enquiry->id,
+                ]);
+            }
 
             return $enquiry;
         }, attempts: 3);
