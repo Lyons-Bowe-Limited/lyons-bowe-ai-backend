@@ -5,6 +5,7 @@ use App\Http\Controllers\AiPlaygroundController;
 use App\Http\Controllers\Api\V1\EnquiryAnswerController;
 use App\Http\Controllers\Api\V1\EnquiryController;
 use App\Http\Controllers\Api\V1\Internal\EnquiryController as InternalEnquiryController;
+use App\Http\Controllers\Api\V1\Internal\MyWorkEnquiryController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\StaffAuthController;
 use App\Http\Controllers\StaffInvitationController;
@@ -82,16 +83,22 @@ Route::prefix('staff')
     ->middleware(['auth:staff_sanctum', 'staff.active'])
     ->group(function () {
 
-        Route::prefix('enquiries')->middleware('staff.permission:enquiries.view')->group(function () {
-            Route::get('/', [InternalEnquiryController::class, 'index']);
-            Route::get('/counts', [InternalEnquiryController::class, 'counts']);
+        Route::prefix('enquiries')->group(function () {
+            Route::get('/', [InternalEnquiryController::class, 'index'])->middleware('staff.permission:enquiries.view');
+            Route::get('/counts', [InternalEnquiryController::class, 'counts'])->middleware('staff.permission:enquiries.view');
+            // Detail authorises global view OR own-work permission and matching assignment.
             Route::get('/{enquiry}', [InternalEnquiryController::class, 'show'])->whereUuid('enquiry');
             Route::patch('/{enquiry}/assignment', [InternalEnquiryController::class, 'assign'])
-                ->whereUuid('enquiry')->middleware('staff.permission:enquiries.assign');
+                ->whereUuid('enquiry')->middleware(['staff.permission:enquiries.view', 'staff.permission:enquiries.assign']);
             Route::patch('/{enquiry}/priority', [InternalEnquiryController::class, 'changePriority'])
-                ->whereUuid('enquiry')->middleware('staff.permission:enquiries.prioritise');
+                ->whereUuid('enquiry')->middleware(['staff.permission:enquiries.view', 'staff.permission:enquiries.prioritise']);
             Route::patch('/{enquiry}/classification', [InternalEnquiryController::class, 'correctClassification'])
-                ->whereUuid('enquiry')->middleware('staff.permission:enquiries.classify');
+                ->whereUuid('enquiry')->middleware(['staff.permission:enquiries.view', 'staff.permission:enquiries.classify']);
+        });
+
+        Route::prefix('my-work')->middleware('staff.permission:work.view-own')->group(function () {
+            Route::get('/enquiries', [MyWorkEnquiryController::class, 'index']);
+            Route::get('/counts', [MyWorkEnquiryController::class, 'counts']);
         });
 
         Route::get('/roles', [StaffRoleController::class, 'index'])

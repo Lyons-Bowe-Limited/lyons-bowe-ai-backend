@@ -3,7 +3,6 @@
 namespace App\Http\Controllers\Api\V1\Internal;
 
 use App\Enums\EnquiryPriority;
-use App\Enums\EnquiryStatus;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Internal\AssignEnquiryRequest;
 use App\Http\Requests\Internal\ChangeEnquiryPriorityRequest;
@@ -12,58 +11,39 @@ use App\Http\Requests\Internal\ListEnquiriesRequest;
 use App\Http\Resources\Internal\EnquiryListItemResource;
 use App\Http\Resources\InternalEnquiryResource;
 use App\Models\Enquiry;
+use App\Models\StaffUser;
 use App\Services\Enquiries\EnquiryPriorityService;
+use App\Services\Enquiries\EnquiryQueueQuery;
 use App\Services\Enquiries\InternalEnquiryService;
+use App\Services\StaffAuthorisationService;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 
 class EnquiryController extends Controller
 {
-    public function index(ListEnquiriesRequest $request): AnonymousResourceCollection
+    public function index(ListEnquiriesRequest $request, EnquiryQueueQuery $queues): AnonymousResourceCollection
     {
         $filters = $request->validated();
-        $query = Enquiry::query()->with('assignedStaff');
-        if (filled($filters['search'] ?? null)) {
-            $term = '%'.str_replace(['!', '%', '_'], ['!!', '!%', '!_'], mb_strtolower(trim($filters['search']))).'%';
-            $query->where(function ($query) use ($term) {
-                foreach (['reference', 'client_name', 'client_email', 'client_phone'] as $column) {
-                    $query->orWhereRaw("LOWER({$column}) LIKE ? ESCAPE '!'", [$term]);
-                }
-            });
-        }
-        foreach (['status', 'practice_area', 'matter_type', 'assigned_staff_id', 'office'] as $field) {
-            if (array_key_exists($field, $filters)) {
-                $query->where($field, $filters[$field]);
-            }
-        }
-        if (array_key_exists('requires_review', $filters)) {
-            $query->where('requires_review', $request->boolean('requires_review'));
-        }
-        if (array_key_exists('unassigned', $filters)) {
-            $request->boolean('unassigned') ? $query->whereNull('assigned_staff_id') : $query->whereNotNull('assigned_staff_id');
-        }
 
-        return EnquiryListItemResource::collection($query
-            ->orderBy($filters['sort'] ?? 'created_at', $filters['direction'] ?? 'desc')->orderBy('id')
+        return EnquiryListItemResource::collection($queues->filter(Enquiry::query()->with('assignedStaff'), $filters)
             ->paginate($filters['per_page'] ?? 25)->withQueryString());
     }
 
-    public function counts(): JsonResponse
+    public function counts(EnquiryQueueQuery $queues): JsonResponse
     {
-        $counts = Enquiry::query()->selectRaw('COUNT(*) AS all_count,
-            COALESCE(SUM(CASE WHEN status = ? THEN 1 ELSE 0 END), 0) AS submitted,
-            COALESCE(SUM(CASE WHEN assigned_staff_id IS NULL THEN 1 ELSE 0 END), 0) AS unassigned,
-            COALESCE(SUM(CASE WHEN assigned_staff_id IS NOT NULL THEN 1 ELSE 0 END), 0) AS assigned,
-            COALESCE(SUM(CASE WHEN requires_review THEN 1 ELSE 0 END), 0) AS review_count', [EnquiryStatus::Submitted->value])->first();
-
-        return response()->json(['data' => [
-            'all' => (int) $counts->all_count, 'submitted' => (int) $counts->submitted,
-            'unassigned' => (int) $counts->unassigned, 'assigned' => (int) $counts->assigned, 'requires_review' => (int) $counts->review_count,
-        ]]);
+        return response()->json(['data' => $queues->counts(Enquiry::query())]);
     }
 
-    public function show(Enquiry $enquiry): InternalEnquiryResource
+    public function show(Request $request, Enquiry $enquiry, StaffAuthorisationService $authorisation): InternalEnquiryResource
     {
+        $staff = $request->user();
+        $allowed = $staff instanceof StaffUser && (
+            $authorisation->allows($staff, 'enquiries.view')
+            || ($authorisation->allows($staff, 'work.view-own') && $enquiry->assigned_staff_id !== null && (int) $enquiry->assigned_staff_id === (int) $staff->id)
+        );
+        abort_unless($allowed, 403, 'You are not authorised to access this enquiry.');
+
         return $this->resource($enquiry);
     }
 
