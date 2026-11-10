@@ -133,8 +133,9 @@ class StaffMyWorkEnquiryTest extends TestCase
         foreach ([['search' => 'UNIQUE'], ['search' => 'queue@example.com', 'status' => 'draft'], ['status' => 'draft'], ['practice_area' => 'property_law'], ['matter_type' => 'conveyancing_purchase']] as $filters) {
             $this->getJson('/api/staff/my-work/enquiries?'.http_build_query($filters))->assertOk()->assertJsonCount(1, 'data')->assertJsonPath('data.0.id', $target->id)->assertJsonPath('meta.total', 1);
         }
-        $this->getJson('/api/staff/my-work/enquiries?sort=reference&direction=asc&per_page=1')->assertOk()->assertJsonPath('data.0.id', $target->id)->assertJsonPath('meta.total', 2)->assertJsonPath('meta.per_page', 1)->assertJsonStructure(['links', 'meta', 'data']);
-        $this->getJson('/api/staff/my-work/enquiries?sort=reference&direction=asc&per_page=1&page=2')->assertJsonPath('data.0.id', $second->id);
+        $target->forceFill(['created_at' => now()->subDay()])->save();
+        $this->getJson('/api/staff/my-work/enquiries?sort=created_at&direction=asc&per_page=1')->assertOk()->assertJsonPath('data.0.id', $target->id)->assertJsonPath('meta.total', 2)->assertJsonPath('meta.per_page', 1)->assertJsonStructure(['links', 'meta', 'data']);
+        $this->getJson('/api/staff/my-work/enquiries?sort=created_at&direction=asc&per_page=1&page=2')->assertJsonPath('data.0.id', $second->id);
         foreach (['sort=assigned_staff_id', 'sort=created_at%20desc%3B%20DROP%20TABLE%20enquiries', 'per_page=101', 'per_page=0', 'direction=invalid'] as $invalid) {
             $this->getJson('/api/staff/my-work/enquiries?'.$invalid)->assertUnprocessable();
         }

@@ -8,7 +8,7 @@ use Illuminate\Database\Eloquent\Builder;
 class EnquiryQueueQuery
 {
     /** Filters only narrow the caller's base query; they never replace its scope. */
-    public function filter(Builder $query, array $filters): Builder
+    public function filter(Builder $query, array $filters, bool $sort = true): Builder
     {
         if (filled($filters['search'] ?? null)) {
             $term = '%'.str_replace(['!', '%', '_'], ['!!', '!%', '!_'], mb_strtolower(trim($filters['search']))).'%';
@@ -30,7 +30,25 @@ class EnquiryQueueQuery
             $filters['unassigned'] ? $query->whereNull('assigned_staff_id') : $query->whereNotNull('assigned_staff_id');
         }
 
-        return $query->orderBy($filters['sort'] ?? 'created_at', $filters['direction'] ?? 'desc')->orderBy('id');
+        return $sort ? $query->orderBy($filters['sort'] ?? 'created_at', $filters['direction'] ?? 'desc')->orderBy('id') : $query;
+    }
+
+    public function sortMyWork(Builder $query, array $filters): Builder
+    {
+        $sort = $filters['sort'] ?? 'created_at';
+        if ($sort === 'priority') {
+            // Fixed SQL, never a client-supplied expression. Unknown/NULL is last.
+            return $query->orderByRaw("CASE priority WHEN 'urgent' THEN 0 WHEN 'high' THEN 1 WHEN 'normal' THEN 2 WHEN 'low' THEN 3 ELSE 4 END ASC")
+                ->orderByDesc('last_activity_at')->orderByDesc('id');
+        }
+        $column = match ($sort) {
+            'created_at' => 'created_at',
+            'last_activity_at' => 'last_activity_at',
+            'submitted_at' => 'submitted_at',
+            default => throw new \InvalidArgumentException('Unsupported My Work sort.'),
+        };
+
+        return $query->orderBy($column, $filters['direction'] ?? 'desc')->orderBy('id');
     }
 
     public function counts(Builder $query, bool $includeDraft = false): array

@@ -81,10 +81,21 @@ Supported parameters:
   255 characters. SQL wildcard characters are escaped.
 - status, practice_area, matter_type: existing canonical values, unchanged.
 - office and requires_review: same validated filters as the global list.
-- sort: created_at, submitted_at, last_activity_at or reference only.
+- sort: priority, created_at, last_activity_at or submitted_at only. Other values,
+  including reference and raw SQL expressions, return 422.
 - direction: asc/desc, default desc; default sort created_at.
 
-An ID secondary order makes ties deterministic. Nonempty assigned_staff_id,
+Priority-first request: `/api/staff/my-work/enquiries?sort=priority&per_page=25`.
+Priority is ranked urgent, high, normal, legacy low, then null/unknown. Ties use
+last_activity_at descending then enquiry ID descending. This semantic order is
+fixed even if direction=asc is supplied; it is never alphabetical. Legacy low is
+supported for reading/sorting, not added to the allowed priority-write values.
+
+Date sorts honour direction=asc/desc (default desc) with an ID ascending secondary
+order, preserving their existing tie-break. Omitted sort defaults to created_at.
+The global Enquiries queue's separate sort allowlist is unchanged.
+
+Secondary orders make ties deterministic. Nonempty assigned_staff_id,
 staff_id, staff_user_id, user_id or unassigned parameters return 422. Empty owner
 fields are discarded and cannot change the scope. Unknown/nested parameters are
 not used to construct filters; they cannot replace ownership. Invalid sorting,
@@ -145,3 +156,15 @@ permission-based custom/combined roles, stale database grants and cached policy,
 owner-parameter spoofing, client/legacy ID collisions, global access restrictions,
 assignment movement/audit preservation and inactive/client-token rejection.
 All test writes used disposable SQLite fixtures.
+
+### My Work sorting update validation
+
+Accepted example: `GET /api/staff/my-work/enquiries?sort=priority&per_page=25`.
+Only priority, created_at, last_activity_at and submitted_at are accepted for
+this endpoint. Empty/array-valued sorts and SQL expressions return 422.
+
+`php artisan test --filter=StaffMyWork` passed with 19 tests / 259 assertions,
+including semantic priority ordering, null/unknown legacy values, date directions,
+deterministic pagination, and ownership/scope-escape regression coverage.
+`php artisan test` passed with 233 tests / 1464 assertions. Pint and diff checks
+passed. No migration or frontend change is required.

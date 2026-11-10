@@ -20,7 +20,9 @@ class MyWorkEnquiryController extends Controller
         // These fields are never passed to the shared filter, even if submitted empty.
         unset($filters['assigned_staff_id'], $filters['staff_id'], $filters['staff_user_id'], $filters['user_id'], $filters['unassigned']);
 
-        return EnquiryListItemResource::collection($queues->filter($query, $filters)
+        $query = $queues->filter($query, $filters, sort: false);
+
+        return EnquiryListItemResource::collection($queues->sortMyWork($query, $filters)
             ->paginate($filters['per_page'] ?? 25)->withQueryString());
     }
 
