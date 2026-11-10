@@ -121,6 +121,14 @@ and ignore attempts to supply a different staff ID or read timestamp. Read times
 use server time. Marking an already-read notification is idempotent; mark-all touches
 only unread rows and preserves prior read timestamps.
 
+The bell popup must request `GET /api/staff/notifications?unread=1` on every
+refresh. Use query values `1` and `0`; literal strings `true` and `false` are
+rejected with 422. `read_at` is the sole read-state field; no separate `is_read`
+flag is returned or maintained. After either read action, subsequent unread
+requests exclude those rows and unread-count reflects the remaining rows.
+Read actions retain notifications in the database for history. Omitting the
+filter continues to return the full personal inbox.
+
 ### Responses
 
 List uses standard Laravel data/links/meta pagination. Each item contains only:

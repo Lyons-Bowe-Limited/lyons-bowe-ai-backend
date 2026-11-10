@@ -177,6 +177,49 @@ class StaffAssignmentNotificationTest extends TestCase
         $this->assertNull($foreign->fresh()->read_at);
     }
 
+    public function test_unread_popup_refresh_excludes_read_notifications_and_preserves_history(): void
+    {
+        $owner = $this->staff();
+        $first = $this->notification($owner);
+        $second = $this->notification($owner);
+        $historical = $this->notification($owner, ['read_at' => now()->subDay()]);
+
+        $this->actingAs($owner, 'staff_sanctum')->getJson('/api/staff/notifications?unread=1')
+            ->assertOk()->assertJsonCount(2, 'data')->assertJsonPath('meta.total', 2);
+        $this->patchJson('/api/staff/notifications/'.$first->id.'/read')
+            ->assertOk()->assertJsonPath('data.id', $first->id)
+            ->assertJsonPath('data.read_at', fn ($value) => is_string($value));
+
+        // A new request represents reloading the popup after navigation or refresh.
+        $this->getJson('/api/staff/notifications?unread=1')->assertOk()
+            ->assertJsonCount(1, 'data')->assertJsonPath('data.0.id', $second->id)
+            ->assertJsonPath('data.0.read_at', null)->assertJsonMissingPath('data.0.is_read');
+        $this->getJson('/api/staff/notifications/unread-count')->assertOk()->assertJsonPath('data.unread_count', 1);
+
+        $this->patchJson('/api/staff/notifications/read-all')->assertOk()->assertJsonPath('data.marked_read', 1);
+        $this->getJson('/api/staff/notifications?unread=1')->assertOk()
+            ->assertJsonCount(0, 'data')->assertJsonPath('meta.total', 0);
+        $this->getJson('/api/staff/notifications/unread-count')->assertOk()->assertJsonPath('data.unread_count', 0);
+
+        $history = $this->getJson('/api/staff/notifications?unread=0')->assertOk()->assertJsonCount(3, 'data');
+        $this->assertEqualsCanonicalizing([$first->id, $second->id, $historical->id], $history->json('data.*.id'));
+        $this->assertDatabaseCount('staff_notifications', 3);
+    }
+
+    public function test_notification_filter_requires_laravel_compatible_query_booleans(): void
+    {
+        $this->actingAs($this->staff(), 'staff_sanctum');
+
+        foreach (['1', '0'] as $value) {
+            $this->getJson('/api/staff/notifications?unread='.$value)->assertOk();
+        }
+
+        foreach (['true', 'false'] as $value) {
+            $this->getJson('/api/staff/notifications?unread='.$value)
+                ->assertUnprocessable()->assertJsonValidationErrors('unread');
+        }
+    }
+
     public function test_mark_all_read_updates_only_own_unread_notifications(): void
     {
         $owner = $this->staff();
