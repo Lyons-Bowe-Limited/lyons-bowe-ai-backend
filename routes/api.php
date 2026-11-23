@@ -12,6 +12,7 @@ use App\Http\Controllers\StaffAuthController;
 use App\Http\Controllers\StaffInvitationController;
 use App\Http\Controllers\StaffManagementController;
 use App\Http\Controllers\StaffRoleController;
+use App\Http\Controllers\StaffUserCountsController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -117,6 +118,9 @@ Route::prefix('staff')
 
         // Staff management — listing and viewing staff accounts.
         Route::get('/users', [StaffManagementController::class, 'index'])
+            ->middleware('staff.permission:team.view');
+
+        Route::get('/users/counts', StaffUserCountsController::class)
             ->middleware('staff.permission:team.view');
 
         Route::get('/users/{staffUser}', [StaffManagementController::class, 'show'])

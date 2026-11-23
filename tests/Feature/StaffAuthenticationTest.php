@@ -120,6 +120,12 @@ class StaffAuthenticationTest extends TestCase
                 'email' => 'admin@example.com',
                 'role' => 'super_admin',
                 'status' => StaffUser::STATUS_ACTIVE,
+                'last_login_at' => $staffUser->fresh()->last_login_at?->toISOString(),
+                'last_active_at' => $staffUser->fresh()->last_active_at?->toISOString(),
+                'activated_at' => $staffUser->activated_at?->toISOString(),
+                'created_at' => $staffUser->created_at?->toISOString(),
+                'office_access' => null,
+                'service_access' => null,
                 'permissions' => collect(config('staff_permissions.roles.super_admin'))->sort()->values()->all(),
             ],
         ]);

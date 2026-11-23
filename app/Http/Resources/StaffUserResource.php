@@ -22,6 +22,12 @@ class StaffUserResource extends JsonResource
             'email' => $this->email,
             'role' => $authorisation->role($this->resource),
             'status' => $this->status,
+            'last_login_at' => $this->last_login_at?->toISOString(),
+            'last_active_at' => $this->last_active_at?->toISOString(),
+            'activated_at' => $this->activated_at?->toISOString(),
+            'created_at' => $this->created_at?->toISOString(),
+            'office_access' => null,
+            'service_access' => null,
             'permissions' => $authorisation->permissions($this->resource)->all(),
         ];
     }

@@ -42,6 +42,7 @@ class StaffUser extends Authenticatable
             'email_verified_at' => 'datetime',
             'activated_at' => 'datetime',
             'last_login_at' => 'datetime',
+            'last_active_at' => 'datetime',
             'password_changed_at' => 'datetime',
             'deactivated_at' => 'datetime',
         ];
