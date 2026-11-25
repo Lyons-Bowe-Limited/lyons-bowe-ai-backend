@@ -43,6 +43,7 @@ return [
     ],
 
     'anthropic' => [
+        'chat_execution_timeout' => env('AI_CHAT_EXECUTION_TIMEOUT', 120),
         'api_key' => env('ANTHROPIC_API_KEY'),
         'model' => env('ANTHROPIC_MODEL', 'claude-sonnet-5-5'),
     ],

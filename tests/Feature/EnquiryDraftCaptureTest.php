@@ -7,6 +7,7 @@ use App\Models\AiConversation;
 use App\Models\AiMessage;
 use App\Models\User;
 use App\Services\ClaudeService;
+use App\Services\ConsultationRecommendationService;
 use App\Services\Enquiries\EnquiryQualificationService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;
@@ -33,6 +34,35 @@ class EnquiryDraftCaptureTest extends TestCase
     private function evaluate(AiConversation $conversation, bool $recommended = false): QualificationResult
     {
         return app(EnquiryQualificationService::class)->qualify($conversation, $conversation->memory()->first(), ['recommend' => $recommended]);
+    }
+
+    public function test_consultation_recommendation_no_longer_presents_a_booking_button(): void
+    {
+        $conversation = $this->conversation();
+        $conversation->memory()->update(['conversation_stage' => 'booking_presented']);
+
+        $this->mock(ConsultationRecommendationService::class, function ($mock) {
+            $mock->shouldReceive('evaluate')->once()->andReturn([
+                'recommend' => true, 'reason' => 'direct_request',
+                'trigger_type' => 'direct_request', 'confidence' => 1,
+            ]);
+        });
+        $this->mock(ClaudeService::class, function ($mock) {
+            $mock->shouldReceive('extractConversationContext')->once()->andReturn([]);
+            $mock->shouldReceive('chat')->once()->andReturn('The team can help with your matter.');
+        });
+
+        $this->actingAs($conversation->user)->postJson('/api/ai/playground/chat', [
+            'conversation_id' => $conversation->uuid,
+            'message' => 'Can I book a consultation with someone?',
+        ])->assertOk()->assertJsonPath('reply', 'The team can help with your matter.')->assertJsonMissingPath('booking_cta')
+            ->assertJsonPath('consultation.recommend', true);
+
+        $this->assertSame('consultation_ready', $conversation->memory()->sole()->conversation_stage);
+        $metadata = $conversation->messages()->where('role', 'assistant')->sole()->metadata;
+        foreach (['booking_link_id', 'booking_link_uuid', 'booking_trigger_type'] as $key) {
+            $this->assertArrayNotHasKey($key, $metadata);
+        }
     }
 
     public function test_exact_staging_urgent_family_help_request_creates_one_draft_urgent_enquiry(): void

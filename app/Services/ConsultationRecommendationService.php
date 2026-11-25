@@ -103,8 +103,7 @@ class ConsultationRecommendationService
         $wordCount = str_word_count(strip_tags($combinedText));
 
         /*
-         * This threshold prevents the booking CTA from appearing
-         * after only a couple of short or vague messages.
+         * Require sufficient detail before recommending a consultation.
          */
         if ($wordCount < 25) {
             return false;

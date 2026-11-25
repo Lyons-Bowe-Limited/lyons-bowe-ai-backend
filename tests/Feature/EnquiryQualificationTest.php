@@ -449,7 +449,7 @@ class EnquiryQualificationTest extends TestCase
         $this->memory($conversation, ['practice_area' => 'general', 'matter_type' => null]);
         $service = app(EnquiryQualificationService::class);
         $this->mock(EnquiryQualificationService::class, function ($mock) use ($service) {
-            $mock->shouldReceive('qualify')->once()->andReturnUsing(function ($conversation, $memory, $consultation) use ($service) {
+            $mock->shouldReceive('qualify')->twice()->andReturnUsing(function ($conversation, $memory, $consultation) use ($service) {
                 $persisted = $memory->fresh();
                 $this->assertSame('property_law', $persisted->practice_area);
                 $this->assertSame('conveyancing_purchase', $persisted->matter_type);
@@ -462,16 +462,21 @@ class EnquiryQualificationTest extends TestCase
             });
         });
         $this->mock(ClaudeService::class, function ($mock) {
-            $mock->shouldReceive('extractConversationContext')->once()->andReturn([
+            $mock->shouldReceive('extractConversationContext')->twice()->andReturn([
                 'practice_area' => 'property_law', 'matter_type' => 'conveyancing_purchase',
                 'practice_area_confidence' => 0.95, 'intent' => 'instruct_solicitor', 'intent_confidence' => 0.90,
                 'conversation_stage' => 'information_gathering',
             ]);
-            $mock->shouldReceive('chat')->once()->andReturn('Test reply');
+            $mock->shouldReceive('chat')->twice()->andReturn('Test reply');
         });
         $this->actingAs($conversation->user)->postJson('/api/ai/playground/chat', [
             'message' => 'I am buying a property. Please contact me.', 'conversation_id' => $conversation->uuid,
-        ])->assertOk();
+        ])->assertOk()->assertJsonPath('reply', "Test reply\n\nI've recorded your enquiry and contact details. Someone from the Lyons Bowe team will be in touch to discuss your matter and the next steps.");
+        $this->postJson('/api/ai/playground/chat', [
+            'message' => 'Please contact me about my property purchase.', 'conversation_id' => $conversation->uuid,
+        ])->assertOk()->assertJsonPath('reply', 'Test reply');
+        $this->assertSame(1, $conversation->messages()
+            ->where('metadata->handoff_enquiry_id', $conversation->enquiry()->sole()->id)->count());
         $this->assertDatabaseHas('enquiries', ['conversation_id' => $conversation->id, 'practice_area' => 'property_law', 'matter_type' => 'conveyancing_purchase', 'requires_review' => false]);
     }
 

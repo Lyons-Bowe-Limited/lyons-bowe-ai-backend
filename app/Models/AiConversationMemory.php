@@ -20,7 +20,6 @@ class AiConversationMemory extends Model
         'practice_area_confidence',
         'intent_confidence',
         'consultation_recommended',
-        'booking_presented',
         'metadata',
     ];
 
@@ -31,7 +30,6 @@ class AiConversationMemory extends Model
         'practice_area_confidence' => 'float',
         'intent_confidence' => 'float',
         'consultation_recommended' => 'boolean',
-        'booking_presented' => 'boolean',
     ];
 
     public function conversation(): BelongsTo

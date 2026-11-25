@@ -6,7 +6,6 @@ use App\Models\AiConversation;
 use App\Models\AiMessage;
 use App\Models\AiMessageSource;
 use App\Models\Enquiry;
-use App\Services\BookingLinkService;
 use App\Services\ClaudeService;
 use App\Services\ConsultationRecommendationService;
 use App\Services\ConversationContextService;
@@ -29,7 +28,6 @@ class AiPlaygroundController extends Controller
         KnowledgeSearchService $knowledge,
         ConversationContextService $conversationContext,
         ConsultationRecommendationService $consultationRecommendation,
-        BookingLinkService $bookingLinks,
         EnquiryWorkflowService $enquiryWorkflow,
         EnquiryQualificationService $enquiryQualification,
         WorkflowDefinitionService $workflowDefinitions,
@@ -37,6 +35,10 @@ class AiPlaygroundController extends Controller
         WorkflowAnswerInterpreter $workflowAnswerInterpreter,
         WorkflowReplyService $workflowReplies
     ): JsonResponse {
+        // Chat includes context extraction, reply generation and database work.
+        // Allow these calls to finish within a bounded request budget.
+        set_time_limit(max(1, (int) config('services.anthropic.chat_execution_timeout', 120)));
+
         $validated = $request->validate([
             'message' => [
                 'required',
@@ -295,23 +297,19 @@ class AiPlaygroundController extends Controller
             $practiceArea
         );
 
-        $bookingLink = null;
-
-        if (($consultation['recommend'] ?? false) === true) {
-            $bookingLink = $bookingLinks->find(
-                $practiceArea,
-                $validated['office'] ?? null,
-                $validated['service'] ?? null
-            );
-        }
-
         // Persist the complete structured evaluation before operational handoff.
         $memory = $conversationContext->recordConsultationResult(
             $memory,
-            $consultation,
-            $bookingLink !== null
+            $consultation
         );
-        $enquiryQualification->qualify($conversation, $memory, $consultation);
+        $qualification = $enquiryQualification->qualify($conversation, $memory, $consultation);
+        $handoffReady = $qualification->qualified
+            && $qualification->enquiry?->submitted_at !== null
+            && ! in_array($qualification->enquiry->status, ['completed', 'closed', 'cancelled'], true);
+        $confirmHandoff = $handoffReady && ! $conversation->messages()
+            ->where('role', 'assistant')
+            ->where('metadata->handoff_enquiry_id', $qualification->enquiry->id)
+            ->exists();
 
         /*
          * Search the authorised Knowledge Bank.
@@ -359,23 +357,25 @@ class AiPlaygroundController extends Controller
             10
         );
 
-        /*
-         * ClaudeService and its approved prompt remain unchanged.
-         */
         $reply = $claude->chat(
             message: $validated['message'],
             knowledgeContext: $knowledgeContext,
             conversationContext: $memoryPromptContext,
             history: $history,
             isFirstAssistantMessage: $isFirstAssistantMessage,
-            bookingAvailable: $bookingLink !== null
+            handoffReady: $handoffReady
         );
+
+        if ($confirmHandoff) {
+            $reply = rtrim($reply)."\n\nI've recorded your enquiry and contact details. Someone from the Lyons Bowe team will be in touch to discuss your matter and the next steps.";
+        }
 
         $assistantMessage = AiMessage::query()->create([
             'ai_conversation_id' => $conversation->id,
             'role' => 'assistant',
             'content' => $reply,
             'metadata' => [
+                'handoff_enquiry_id' => $confirmHandoff ? $qualification->enquiry->id : null,
                 'model' => config('services.anthropic.model'),
                 'source_count' => $documents->count(),
                 'practice_area' => $practiceArea,
@@ -399,9 +399,6 @@ class AiPlaygroundController extends Controller
                     $consultation['confidence'] ?? null
                 ),
 
-                'booking_link_id' => $bookingLink?->id,
-                'booking_link_uuid' => $bookingLink?->uuid,
-                'booking_trigger_type' => $bookingLink?->trigger_type,
             ],
         ]);
 
@@ -474,17 +471,6 @@ class AiPlaygroundController extends Controller
 
             'consultation' => $consultation,
 
-            'booking_cta' => $bookingLink
-                ? [
-                    'label' => 'Book a consultation',
-                    'url' => $bookingLink->booking_url,
-                    'name' => $bookingLink->name,
-                    'practice_area' => $bookingLink->practice_area,
-                    'office' => $bookingLink->office,
-                    'service' => $bookingLink->service,
-                    'trigger_type' => $bookingLink->trigger_type,
-                ]
-                : null,
         ]);
     }
 
@@ -563,7 +549,6 @@ class AiPlaygroundController extends Controller
             'conversation_context' => null,
             'sources' => [],
             'consultation' => null,
-            'booking_cta' => null,
         ]);
     }
 

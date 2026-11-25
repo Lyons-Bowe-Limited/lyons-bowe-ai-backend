@@ -20,7 +20,6 @@ class ConversationContextService
         'information_gathering',
         'guidance',
         'consultation_ready',
-        'booking_presented',
         'completed',
     ];
 
@@ -36,7 +35,6 @@ class ConversationContextService
                 'practice_area_confidence' => 0,
                 'intent_confidence' => 0,
                 'consultation_recommended' => false,
-                'booking_presented' => false,
                 'metadata' => [],
             ]
         );
@@ -194,14 +192,11 @@ CONTEXT;
 
     public function recordConsultationResult(
         AiConversationMemory $memory,
-        array $consultation,
-        bool $bookingPresented
+        array $consultation
     ): AiConversationMemory {
-        $stage = $memory->conversation_stage;
+        $stage = $this->validConversationStage(null, $memory->conversation_stage);
 
-        if ($bookingPresented) {
-            $stage = 'booking_presented';
-        } elseif (($consultation['recommend'] ?? false) === true) {
+        if (($consultation['recommend'] ?? false) === true) {
             $stage = 'consultation_ready';
         }
 
@@ -219,7 +214,6 @@ CONTEXT;
             'consultation_recommended' => (
                 $consultation['recommend'] ?? false
             ),
-            'booking_presented' => $bookingPresented,
             'metadata' => $metadata,
         ]);
 
@@ -251,7 +245,9 @@ CONTEXT;
             return $value;
         }
 
-        return $fallback ?: 'information_gathering';
+        return in_array($fallback, self::CONVERSATION_STAGES, true)
+            ? $fallback
+            : 'information_gathering';
     }
 
     private function cleanNullableString(
